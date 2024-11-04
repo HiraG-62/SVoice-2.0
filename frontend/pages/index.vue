@@ -12,7 +12,7 @@ const {
 } = useComponents();
 
 if(session.value.user) {
-  gamerTag.value = (session.value?.user as { discordId: string; gamerTag: string }).gamerTag
+  gamerTag.value = (session.value?.user as { discordId: string; discordAuth: boolean; gamerTag: string }).gamerTag
 }
 
 

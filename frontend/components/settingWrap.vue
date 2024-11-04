@@ -1,4 +1,8 @@
 <script setup lang="ts">
+const { session } = useUserSession();
+
+const discordAuth = (session.value?.user as { discordId: string; discordAuth: boolean; gamerTag: string }).discordAuth;
+
 
 const {
   themeColor,
@@ -37,7 +41,7 @@ defineExpose({
       <v-tabs v-model="settingTabs" :color="themeColorDark(1).value" fixed-tabs>
         <v-tab value="general" width="33%">一般</v-tab>
         <v-tab value="sound" width="33%">サウンド</v-tab>
-        <v-tab value="ingame" width="33%">インゲーム</v-tab>
+        <v-tab v-if="discordAuth" value="ingame" width="33%">インゲーム</v-tab>
       </v-tabs>
       <v-tabs-window v-model="settingTabs" style="overflow-y: auto;">
         <v-tabs-window-item value="general">

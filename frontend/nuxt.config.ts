@@ -31,6 +31,10 @@ export default defineNuxtConfig({
       server: {
         socket: {
           url: process.env.NUXT_PUBLIC_SERVER_SOCKET_URL || '',
+        },
+        api: {
+          url: process.env.NUXT_PUBLIC_SERVER_API_URL || '',
+          sslurl: process.env.NUXT_PUBLIC_SERVER_API_SSLURL || ''
         }
       }
     },

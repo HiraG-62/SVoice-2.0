@@ -1,6 +1,5 @@
 import type { LocalAudioStream, RoomPublication } from '@skyway-sdk/room';
 import { useCusEvent } from './useCusEvent';
-import { stringifyQuery } from 'vue-router';
 
 export async function useConnectSkyway(gamerTag: string) {
   if (typeof window !== 'undefined' && !import.meta.env.SSR) {
@@ -14,6 +13,10 @@ export async function useConnectSkyway(gamerTag: string) {
       RemoteAudioStream
     } = await import('@skyway-sdk/room');
 
+    const { session } = useUserSession();
+
+    const discordId = (session.value?.user as { discordId: string; discordAuth: boolean; gamerTag: string }).discordId;
+
     const { on: cusOn } = useCusEvent();
     const { on: exitOn } = useExitEvent();
 
@@ -22,6 +25,7 @@ export async function useConnectSkyway(gamerTag: string) {
       audioContext,
       micNode,
       micDest,
+      phoneLevel,
       isJoining,
       isJoiningIngame,
       userList,
@@ -100,6 +104,7 @@ export async function useConnectSkyway(gamerTag: string) {
 
     const subscribeMap = new Map<string, { pub: RoomPublication, sub: string }>();
     let playerVolume = new Map<string, number>();
+    let hasPhone = 0;
 
     const subscribeAttach = async (publication: RoomPublication) => {
 
@@ -181,7 +186,7 @@ export async function useConnectSkyway(gamerTag: string) {
         let volume = 0;
         if (playerVolume.get(pubName) != undefined) volume = playerVolume.get(pubName)!;
 
-        return 2 * userInfo.gain * volume;
+        return 2 * userInfo.gain * volume * (phoneLevel.value / 100);
       })
 
       gainNode.gain.value = changeGain.value
@@ -197,8 +202,19 @@ export async function useConnectSkyway(gamerTag: string) {
     }
 
     cusOn('event', async () => {
+      if(!playerData.value) return;
       const selfData = getSelfData(gamerTag);
       isJoiningIngame.value = selfData != undefined ? true : false;
+
+      if(hasPhone != selfData.hasTelephone) {
+        if(hasPhone == 0) {
+          $fetch(`${config.public.server.api.sslurl}/setPhoneRole?id=${discordId}`)
+        } else {
+          $fetch(`${config.public.server.api.sslurl}/removePhoneRole?id=${discordId}`)
+        }
+      }
+      hasPhone = selfData.hasTelephone;
+
 
       const distanceData = getDistance(selfData);
       playerVolume = calcPlayerVolume(selfData, distanceData);

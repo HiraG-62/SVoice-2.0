@@ -6,6 +6,7 @@ let isListening = false;
 const createMicNode = async () => {
   const {
     micLevel,
+    phoneLevel,
     microphone,
     isNoiseSuppression,
     media,
@@ -23,6 +24,8 @@ const createMicNode = async () => {
   micDest.value = audioContext.value!.createMediaStreamDestination();
 
   micLevel.value = Number(localStorage.getItem('micLevel')) || 100;
+  phoneLevel.value = Number(localStorage.getItem('phoneLevel')) || 100;
+  console.log(localStorage.getItem('phoneLevel'))
 
   micNode.value.gain.value = micLevel.value / 50;
 

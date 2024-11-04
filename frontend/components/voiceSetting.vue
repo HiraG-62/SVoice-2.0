@@ -67,6 +67,10 @@ watch(selectedInput, async () => {
   await useChangeMicMedia(isMicTest.value);
 })
 
+watch(phoneLevel, async () => {
+  localStorage.setItem('phoneLevel', phoneLevel.value.toString());
+})
+
 </script>
 
 <template>
