@@ -5,6 +5,7 @@ let isListening = false;
 
 const createMicNode = async () => {
   const {
+    isSelfMute,
     micLevel,
     phoneLevel,
     microphone,
@@ -25,9 +26,12 @@ const createMicNode = async () => {
 
   micLevel.value = Number(localStorage.getItem('micLevel')) || 100;
   phoneLevel.value = Number(localStorage.getItem('phoneLevel')) || 100;
-  console.log(localStorage.getItem('phoneLevel'))
 
-  micNode.value.gain.value = micLevel.value / 50;
+  micNode.value.gain.value = micLevel.value / 50 * (isSelfMute.value ? 0 : 1);
+
+  watch(isSelfMute, (newMute) => {
+    micNode.value!.gain.value = micLevel.value / 50 * (newMute ? 0 : 1);
+  })
 
   if(isNoiseSuppression.value) {
     microphone.value.connect(noiseSupNode.value);

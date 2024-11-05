@@ -1,4 +1,4 @@
-import type { LocalAudioStream, RoomPublication } from '@skyway-sdk/room';
+import type { LocalAudioStream, LocalSFURoomMember, RoomPublication } from '@skyway-sdk/room';
 import { useCusEvent } from './useCusEvent';
 
 export async function useConnectSkyway(gamerTag: string) {
@@ -91,7 +91,13 @@ export async function useConnectSkyway(gamerTag: string) {
     const spaceMorse = '....__..__._..';
     const joinName = gamerTag.replace(/ /g, spaceMorse);
 
-    const me = await room.join({ name: joinName });
+    let me: LocalSFURoomMember;
+
+    try {
+      me = await room.join({ name: joinName });
+    } catch(err) {
+      throw 'joining_error';
+    }
 
     if (micDest.value) {
       const { stream } = micDest.value

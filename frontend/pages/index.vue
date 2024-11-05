@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useDisconnectSocket } from '~/composables/useSocket';
+
 const { user, session, loggedIn} = useUserSession();
 
 const loading = ref<boolean>(true);
@@ -17,7 +19,7 @@ if(session.value.user) {
 
 
 const route = useRoute()
-const errorMessage = computed(() => {
+const error = computed(() => {
   const error = route.query.error
   if(error == 'authentication_error') {
     return 'Discord認証に失敗しました。';
@@ -27,6 +29,7 @@ const errorMessage = computed(() => {
     return '';
   }
 })
+const errorMessage = ref<string>(error.value);
 
 const loginClick = async () => {
   await navigateTo('/auth/discord', { external: true });
@@ -34,9 +37,24 @@ const loginClick = async () => {
 
 const joinClick = async () => {
   joinLoad.value = true;
+  errorMessage.value = '';
+
+  try {
+    await useConnectSkyway(gamerTag.value);
+  } catch(err) {
+    if(err == 'joining_error') {
+      errorMessage.value = '通話に参加できませんでした。時間を空けてもう一度お試しください。'
+    }
+
+    joinLoad.value = false;
+    isJoining.value = false;
+
+    return;
+  }
+
+  errorMessage.value = '';
 
   await useConnectSocket();
-  useConnectSkyway(gamerTag.value);
 
   joinLoad.value = false;
   isJoining.value = true;
@@ -65,7 +83,7 @@ onMounted(async () => {
           <img src="/public/images/logo.png" alt="" height="150px">
         </v-row>
         <v-row justify="center" align-content="center" no-gutters>
-          <v-col cols="10" sm="10" md="8" lg="8" xl="8">
+          <v-col cols="12" sm="12" md="8" lg="8" xl="8">
             <v-container id="main-container">
               <v-card color="#fffc" height="70vh">
                 <AuthState>
@@ -75,6 +93,11 @@ onMounted(async () => {
                         <voice-header />
                       </v-toolbar>
                       <v-row id="main" justify="center" align-content="center" no-gutters>
+                        <div v-if="errorMessage">
+                          <v-col cols="12">
+                            <p class="text-center text-red">※{{ errorMessage }}</p>
+                          </v-col>
+                        </div>
                         <v-btn v-if="!isJoining && !joinLoad" @click="joinClick" color="green" width="200">参加</v-btn>
                         <v-progress-circular v-else-if="joinLoad" indeterminate size="64"
                           color="blue"></v-progress-circular>

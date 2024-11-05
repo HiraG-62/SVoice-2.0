@@ -16,7 +16,7 @@ const logout = () => {
     <AuthState>
       <template #default="{ loggedIn, clear }">
         <v-row justify="center" no-gutters>
-          <v-col cols="6">
+          <v-col cols="10" sm="10" md="8" lg="6" xl="6">
             <v-list-item>
               <v-list-item-subtitle>
                 Discord認証

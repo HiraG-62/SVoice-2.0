@@ -32,6 +32,11 @@ export async function useConnectSocket() {
   })
 }
 
+export function useDisconnectSocket() {
+  socket.off('playerData');
+  socket.off('changeSetting');
+}
+
 export function useSetSettingSocket() {
   if (!socket) {
     const { $socket } = useNuxtApp();
