@@ -17,20 +17,17 @@ export async function useConnectSkyway(gamerTag: string) {
 
     const discordId = (session.value?.user as { discordId: string; discordAuth: boolean; gamerTag: string }).discordId;
 
-    const { on: cusOn } = useCusEvent();
-    const { on: exitOn } = useExitEvent();
+    const { on: cusOn, off: cusOff } = useCusEvent();
+    const { on: exitOn, off: exitOff } = useExitEvent();
 
     const {
-      media,
       audioContext,
-      micNode,
       micDest,
       phoneLevel,
-      isJoining,
       isJoiningIngame,
       userList,
-      ingameSettings,
-      playerData
+      playerData,
+      adminSpeaker
     } = useComponents();
 
     const config = useRuntimeConfig();
@@ -188,9 +185,12 @@ export async function useConnectSkyway(gamerTag: string) {
       userList.value.push(userInfo)
 
       const changeGain = computed(() => {
-        const oppData = playerData.value.find(player => player.name == pubName)!;
+        if(playerData.value) {
+          const oppData = playerData.value.find(player => player.name == pubName)!;
+        }
         let volume = 0;
         if (playerVolume.get(pubName) != undefined) volume = playerVolume.get(pubName)!;
+        if(adminSpeaker.value.has(pubName)) volume = 1;
 
         return 2 * userInfo.gain * volume * (phoneLevel.value / 100);
       })
@@ -243,6 +243,14 @@ export async function useConnectSkyway(gamerTag: string) {
     })
 
     exitOn('exit', async () => {
+      subscribeMap.forEach((e, key) => unsubscribeCleanup(key));
+
+      room.onStreamPublished.removeAllListeners();
+      room.onMemberLeft.removeAllListeners();
+
+      cusOff('event');
+      exitOff('exit');
+
       await me.leave();
     })
 
@@ -320,6 +328,8 @@ export async function useConnectSkyway(gamerTag: string) {
     const calc = (oppName: string) => {
       const oppData = playerData.value.find(player => player.name == oppName)!;
       const oppDistance = distanceData.get(oppName)!;
+
+      if(oppName)
 
       if (oppData == undefined || selfData == undefined) return 0;
 

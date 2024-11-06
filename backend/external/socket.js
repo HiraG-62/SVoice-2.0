@@ -17,6 +17,7 @@ async function startSocket() {
   })
   
   const userMap = new Map();
+  const adminSpeaker = new Set();
   
   io.on('connection', (socket) => {
     console.log('New client connected: ' + socket.id);
@@ -28,7 +29,7 @@ async function startSocket() {
       userMap.set(socket.id, {
         gamerTag: data
       })
-      socket.emit('joined');
+      socket.emit('joined', Array.from(adminSpeaker));
     });
   
     setInterval(() => {
@@ -36,13 +37,45 @@ async function startSocket() {
         const data = getData();
         socket.emit('playerData', data);
       }
-    }, 1000)
+    }, 100)
   
     socket.on('changeSetting', () => {
       io.emit('changeSetting');
     })
+
+    socket.on('onSpeaker', () => {
+      const speaker = userMap.get(socket.id);
+      adminSpeaker.add(speaker.gamerTag);
+      io.emit('setAdminSpeaker', Array.from(adminSpeaker));
+    })
+
+    socket.on('offSpeaker', () => {
+      const speaker = userMap.get(socket.id);
+      adminSpeaker.delete(speaker.gamerTag);
+      io.emit('setAdminSpeaker', Array.from(adminSpeaker));
+    })
+
+    socket.on('exit', () => {
+      const user = userMap.get(socket.id);
+      if(adminSpeaker.has(user.gamerTag)) {
+        adminSpeaker.delete(user.gamerTag);
+        io.emit('setAdminSpeaker', Array.from(adminSpeaker));
+      }
+    })
+
+    socket.on('kick', (data) => {
+      const id = Array.from(userMap).find(([k, v]) => v.gamerTag == data)?.[0] || null;
+
+      io.to(id).emit('kicked');
+    })
   
     socket.on('disconnect', () => {
+      const user = userMap.get(socket.id);
+      if(adminSpeaker.has(user.gamerTag)) {
+        adminSpeaker.delete(user.gamerTag);
+        io.emit('setAdminSpeaker', Array.from(adminSpeaker));
+      }
+
       userMap.delete(socket.id);
       console.log('Client disconnected: ' + socket.id);
     });

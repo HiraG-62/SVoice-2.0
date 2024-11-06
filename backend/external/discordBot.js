@@ -58,7 +58,11 @@ async function startDiscordServer() {
   const displayJoinMember = async () => {
     try {
       const data = getData();
-      playerCount = data.length;
+      if(data) {
+        playerCount = data.length;
+      } else {
+        playerCount = 0;
+      }
 
       if (count == playerCount || (count >= 20 && playerCount > 20)) {
           setTimeout(displayJoinMember, 10 * 1000);

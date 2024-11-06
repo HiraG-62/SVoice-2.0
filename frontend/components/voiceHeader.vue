@@ -1,4 +1,8 @@
 <script setup lang="ts">
+const { session } = useUserSession();
+
+const discordAuth = (session.value?.user as { discordId: string; discordAuth: boolean; gamerTag: string }).discordAuth;
+
 const { emit } = useExitEvent()
 
 const {
@@ -7,6 +11,7 @@ const {
   isNoiseSuppression,
   isJoining,
   isJoiningIngame,
+  isSpeaking
 } = useComponents();
 
 const toggleNoiseSuppression = () => {
@@ -22,8 +27,21 @@ const openSetting = () => {
   }
 }
 
+const adminSpeak = () => {
+  if(isSpeaking.value) {
+    useOffAdminSpeaker();
+    isSpeaking.value = false;
+  } else {
+    useOnAdminSpeaker();
+    isSpeaking.value = true;
+  }
+}
+
 const exit = () => {
   emit('exit', 'exit');
+  useDisconnectSocket();
+
+  isSpeaking.value = false;
   isJoining.value = false;
 }
 
@@ -31,8 +49,8 @@ const exit = () => {
 
 <template>
   <v-container>
-    <v-row justify="center" align-content="center" no-gutters>
-      <v-col cols="8">
+    <v-row justify="center" align-content="center" no-gutters class="ml-2">
+      <v-col :cols="isJoining ? discordAuth ? 7 : 8 : 9">
         <v-toolbar-title>
           <v-icon size="x-large">mdi-account-circle</v-icon>
           {{ gamerTag }}
@@ -44,11 +62,18 @@ const exit = () => {
           {{ isJoining ? isJoiningIngame ? '参加中' : '待機中' : '未参加' }}
         </span>
       </v-col>
-      <v-col cols="4" class="d-flex justify-center align-center">
+      <v-col :cols="isJoining ? discordAuth ? 5 : 4 : 3" class="d-flex justify-end align-center">
         <v-tooltip v-if="isJoining" text="退出" location="top">
           <template #activator="{ props }">
-            <v-icon v-bind="props" size="x-large" @click="exit" :class="['mr-1']">
+            <v-icon v-bind="props" size="x-large" @click="exit" :class="['mr-2']">
               mdi-phone-off
+            </v-icon>
+          </template>
+        </v-tooltip>
+        <v-tooltip v-if="isJoining && discordAuth" :text="isSpeaking ? '全体発言中' : '全体発言'" location="top">
+          <template #activator="{ props }">
+            <v-icon v-bind="props" size="x-large" @click="adminSpeak" :class="['mr-1']" :color="isSpeaking ? 'orange' : 'black'">
+              mdi-bullhorn
             </v-icon>
           </template>
         </v-tooltip>

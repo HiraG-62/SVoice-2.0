@@ -9,6 +9,7 @@ const emitter = mitt<Events>();
 export function useCusEvent() {
   return {
     on: emitter.on,
+    off: emitter.off,
     emit: emitter.emit
   }
 }
@@ -22,6 +23,7 @@ const exitEmitter = mitt<Exit>();
 export function useExitEvent() {
   return {
     on: exitEmitter.on,
+    off: exitEmitter.off,
     emit: exitEmitter.emit
   }
 }

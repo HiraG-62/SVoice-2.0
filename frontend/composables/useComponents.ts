@@ -44,6 +44,8 @@ export function useComponents() {
 
   const ingameSettings = useState<ingameSettings | null>('ingameSettings', () => null);
   const playerData = useState<playerData[]>('playerData', () => []);
+  const isSpeaking = useState<boolean>('isSpeaking', () => false);
+  const adminSpeaker = useState<Set<string>>('adminSpeaker', () => new Set());
 
   function sliderLevel(value: number, max: number) {
     if (value == 0) return 'grey'
@@ -88,6 +90,8 @@ export function useComponents() {
     micDest,
     userList,
     ingameSettings,
-    playerData
+    playerData,
+    isSpeaking,
+    adminSpeaker
   }
 }
