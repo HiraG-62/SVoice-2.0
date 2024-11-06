@@ -92,7 +92,7 @@ export async function useConnectSkyway(gamerTag: string) {
 
     try {
       me = await room.join({ name: joinName });
-    } catch(err) {
+    } catch (err) {
       throw 'joining_error';
     }
 
@@ -116,7 +116,7 @@ export async function useConnectSkyway(gamerTag: string) {
 
       if (publisher.id === me.id) return;
 
-      if(subscribeMap.has(pubName)) {
+      if (subscribeMap.has(pubName)) {
         unsubscribeCleanup(pubName);
       }
 
@@ -185,12 +185,12 @@ export async function useConnectSkyway(gamerTag: string) {
       userList.value.push(userInfo)
 
       const changeGain = computed(() => {
-        if(playerData.value) {
+        if (playerData.value) {
           const oppData = playerData.value.find(player => player.name == pubName)!;
         }
         let volume = 0;
         if (playerVolume.get(pubName) != undefined) volume = playerVolume.get(pubName)!;
-        if(adminSpeaker.value.has(pubName)) volume = 1;
+        if (adminSpeaker.value.has(pubName)) volume = 1;
 
         return 2 * userInfo.gain * volume * (phoneLevel.value / 100);
       })
@@ -208,38 +208,60 @@ export async function useConnectSkyway(gamerTag: string) {
     }
 
     cusOn('event', async () => {
-      if(!playerData.value) return;
+      if (!playerData.value) return;
       const selfData = getSelfData(gamerTag);
-      isJoiningIngame.value = selfData != undefined ? true : false;
 
-      if(hasPhone != selfData.hasTelephone) {
-        if(hasPhone == 0) {
-          $fetch(`${config.public.server.api.sslurl}/setPhoneRole?id=${discordId}`)
-        } else {
-          $fetch(`${config.public.server.api.sslurl}/removePhoneRole?id=${discordId}`)
-        }
-      }
-      hasPhone = selfData.hasTelephone;
+      if (selfData) {
+        isJoiningIngame.value = true;
 
-
-      const distanceData = getDistance(selfData);
-      playerVolume = calcPlayerVolume(selfData, distanceData);
-      playerVolume.forEach(async (volume, name) => {
-        try {
-          if (volume == 0) {
-            if (me.subscriptions.find(sub => sub.id == subscribeMap.get(name)?.sub!)) {
-              await me.unsubscribe(subscribeMap.get(name)?.sub!);
-            }
+        if (hasPhone != selfData.hasTelephone) {
+          if (hasPhone == 0) {
+            $fetch(`${config.public.server.api.sslurl}/setPhoneRole?id=${discordId}`)
           } else {
-            if (!me.subscriptions.find(sub => sub.id == subscribeMap.get(name)?.sub!) &&
-                room.publications.find(pub => pub == subscribeMap.get(name)?.pub!)) {
-              subscribeAttach(subscribeMap.get(name)?.pub!)
-            }
+            $fetch(`${config.public.server.api.sslurl}/removePhoneRole?id=${discordId}`)
           }
-        } catch (err) {
-
         }
-      })
+        hasPhone = selfData.hasTelephone;
+
+        const distanceData = getDistance(selfData);
+        playerVolume = calcPlayerVolume(selfData, distanceData);
+        subscribeMap.forEach(async (member, name) => {
+          try {
+            const shouldSubscribe =
+              adminSpeaker.value.has(name) || (playerVolume.get(name) ?? 0) > 0;
+
+            if (shouldSubscribe) {
+              if (!me.subscriptions.some(sub => sub.id === member.sub!) &&
+                room.publications.includes(member.pub!)) {
+                subscribeAttach(member.pub!);
+              }
+            } else if (me.subscriptions.some(sub => sub.id === member.sub!)) {
+              await me.unsubscribe(member.sub!);
+            }
+          } catch (err) {
+            console.log(err);
+          }
+        })
+      } else {
+        isJoiningIngame.value = false;
+
+        subscribeMap.forEach(async (member, name) => {
+          try {
+            if (adminSpeaker.value.has(name)) {
+              if (!me.subscriptions.find(sub => sub.id == member.sub!) &&
+                room.publications.find(pub => pub == member.pub!)) {
+                subscribeAttach(member.pub!)
+              }
+            } else {
+              if (me.subscriptions.find(sub => sub.id == member.sub!)) {
+                await me.unsubscribe(member.sub!);
+              }
+            }
+          } catch (err) {
+            console.log(err);
+          }
+        })
+      }
     })
 
     exitOn('exit', async () => {
@@ -329,9 +351,9 @@ export async function useConnectSkyway(gamerTag: string) {
       const oppData = playerData.value.find(player => player.name == oppName)!;
       const oppDistance = distanceData.get(oppName)!;
 
-      if(oppName)
+      if (oppName)
 
-      if (oppData == undefined || selfData == undefined) return 0;
+        if (oppData == undefined || selfData == undefined) return 0;
 
       if (selfData.telephone + oppData.telephone == 0) coef = 1;
       else if ((selfData.telephone == oppData.telephone)) return 1;
@@ -372,7 +394,7 @@ export async function useConnectSkyway(gamerTag: string) {
     }
 
     playerData.value.forEach(player => {
-      if(selfData == undefined) {
+      if (selfData == undefined) {
         playerVolume.set(player.name, 0);
         return;
       }
