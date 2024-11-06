@@ -131,7 +131,6 @@ export function useMicIndicator() {
         const sum = dataArray?.reduce((acc, val) => acc + val, 0) || 0;
         micIndicator.value = Math.min(Math.max(sum / bufferLength, 0), 100);
         animationFrameId = requestAnimationFrame(updateVolume);
-        console.log(micIndicator.value)
       };
 
       updateVolume();

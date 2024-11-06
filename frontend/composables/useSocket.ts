@@ -22,7 +22,6 @@ export async function useConnectSocket() {
 
   await new Promise<void>((resolve) => {
     socket.on('joined', (data: Array<string>) => {
-      console.log(data);
       adminSpeaker.value = new Set(data);
       resolve();
     })
@@ -75,6 +74,5 @@ export function useOffAdminSpeaker() {
 }
 
 export function useKick(gamerTag: string) {
-  console.log(gamerTag)
   socket.emit('kick', gamerTag);
 }
