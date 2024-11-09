@@ -3,7 +3,7 @@ const { session } = useUserSession();
 
 const discordAuth = (session.value?.user as { discordId: string; discordAuth: boolean; gamerTag: string }).discordAuth;
 
-const { emit } = useExitEvent()
+const { on, emit } = useCusEvent()
 
 const {
   gamerTag,
@@ -37,6 +37,16 @@ const adminSpeak = () => {
   }
 }
 
+const toggleMute = (status: number) => {
+  if ((status === 1 && !isSelfMute.value) || (status === 2 && !isSelfMute.value)) {
+    new Audio('/sounds/mute.mp3').play();
+    isSelfMute.value = true;
+  } else if ((status === 1 && isSelfMute.value) || (status === 3 && isSelfMute.value)) {
+    new Audio('/sounds/unmute.mp3').play();
+    isSelfMute.value = false;
+  }
+}
+
 const exit = () => {
   emit('exit', 'exit');
   useDisconnectSocket();
@@ -44,6 +54,8 @@ const exit = () => {
   isSpeaking.value = false;
   isJoining.value = false;
 }
+
+on('mute', (status: number) => toggleMute(status));
 
 </script>
 
@@ -79,7 +91,7 @@ const exit = () => {
         </v-tooltip>
         <v-tooltip :text="isSelfMute ? 'ミュート解除' : 'ミュート'" location="top">
           <template #activator="{ props }">
-            <v-icon v-bind="props" size="x-large" @click="isSelfMute = !isSelfMute" :class="['mr-1']" :color="isSelfMute ? 'red' : ''">
+            <v-icon v-bind="props" size="x-large" @click="toggleMute(1)" :class="['mr-1']" :color="isSelfMute ? 'red' : ''">
               {{ isSelfMute ? 'mdi-microphone-off' : 'mdi-microphone' }}
             </v-icon>
           </template>

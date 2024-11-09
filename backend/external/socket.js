@@ -1,20 +1,39 @@
 const { Server } = require('socket.io');
-const { createServer } = require('https');
+const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const { getData } = require('./express');
 
-async function startSocket() {
-  const httpServer = createServer({
-    key: fs.readFileSync('./key/privkey.pem'),
-    cert: fs.readFileSync('./key/fullchain.pem')
-  });
+require('dotenv').config();
+const isDevelopment = process.env.NODE_ENV == 'dev';
 
-  const io = new Server(httpServer, {
-    cors: {
-      origin: "https://kei-server.com",
-      methods: ["GET", "POST"]
-    }
-  })
+async function startSocket() {
+  let server;
+  let io;
+
+  if(isDevelopment) {
+    server = http.createServer();
+
+    io = new Server(server, {
+      cors: {
+        origin: process.env.SERVER_URL,
+        methods: ["GET", "POST"]
+      }
+    })
+  } else {
+    server = https.createServer({
+      key: fs.readFileSync('./key/privkey.pem'),
+      cert: fs.readFileSync('./key/fullchain.pem')
+    });
+
+    io = new Server(server, {
+      cors: {
+        origin: process.env.SERVER_URL,
+        methods: ["GET", "POST"]
+      }
+    })
+  }
+
   
   const userMap = new Map();
   const adminSpeaker = new Set();
@@ -81,7 +100,7 @@ async function startSocket() {
     });
   })
   
-  httpServer.listen(3001, () => {
+  server.listen(3001, () => {
     console.log('WebSocket server running on port 3001')
   })
 }

@@ -17,15 +17,16 @@ export async function useConnectSkyway(gamerTag: string) {
 
     const discordId = (session.value?.user as { discordId: string; discordAuth: boolean; gamerTag: string }).discordId;
 
-    const { on: cusOn, off: cusOff } = useCusEvent();
-    const { on: exitOn, off: exitOff } = useExitEvent();
+    const { on, off, emit } = useCusEvent();
 
     const {
       audioContext,
       micDest,
       phoneLevel,
+      isSelfMute,
       isJoiningIngame,
       userList,
+      nearbyUserList,
       playerData,
       adminSpeaker
     } = useComponents();
@@ -108,6 +109,33 @@ export async function useConnectSkyway(gamerTag: string) {
     const subscribeMap = new Map<string, { pub: RoomPublication, sub: string }>();
     let playerVolume = new Map<string, number>();
     let hasPhone = 0;
+    let isMute = 0;
+
+    const addJoinMember = async (publication: RoomPublication) => {
+      const publisher = publication.publisher;
+      const pubName = publisher.name!.replace(/....__..__._../g, ' ');
+
+      if (publisher.id === me.id) return;
+
+      subscribeMap.set(pubName, { pub: publication, sub: '' });
+
+      const gain = Number(localStorage.getItem(pubName)) || 1;
+
+      const userInfo = reactive({
+        gamerTag: pubName,
+        gain: ref(gain)
+      })
+
+      userList.value.push(userInfo);
+
+      watch(userInfo, (newInfo) => {
+        const isNearby = nearbyUserList.value.find(user => user.gamerTag == pubName);
+        if(isNearby) {
+          isNearby.gain = userInfo.gain;
+        }
+        localStorage.setItem(pubName, userInfo.gain.toString());
+      })
+    }
 
     const subscribeAttach = async (publication: RoomPublication) => {
 
@@ -115,10 +143,6 @@ export async function useConnectSkyway(gamerTag: string) {
       const pubName = publisher.name!.replace(/....__..__._../g, ' ');
 
       if (publisher.id === me.id) return;
-
-      if (subscribeMap.has(pubName)) {
-        unsubscribeCleanup(pubName);
-      }
 
       const { stream, subscription } = await me.subscribe(publication.id);
       subscribeMap.set(pubName, { pub: publication, sub: subscription.id });
@@ -170,7 +194,8 @@ export async function useConnectSkyway(gamerTag: string) {
       newAudio.muted = false;
       newAudio.srcObject = destination.stream;
 
-      const gain = Number(localStorage.getItem(pubName)) || 1;
+      console.log(Number(localStorage.getItem(pubName)))
+      const gain = Number(localStorage.getItem(pubName)) ?? 1;
 
       const userInfo = reactive({
         gamerTag: pubName,
@@ -182,7 +207,7 @@ export async function useConnectSkyway(gamerTag: string) {
         analyser,
         audio: newAudio
       })
-      userList.value.push(userInfo)
+      nearbyUserList.value.push(userInfo)
 
       const changeGain = computed(() => {
         if (playerData.value) {
@@ -202,12 +227,14 @@ export async function useConnectSkyway(gamerTag: string) {
       })
 
       watch(userInfo, (newInfo) => {
+        const user = userList.value.find(user => user.gamerTag = pubName);
+        user!.gain = userInfo.gain
         localStorage.setItem(pubName, userInfo.gain.toString());
       })
 
     }
 
-    cusOn('event', async () => {
+    on('dataCycle', async () => {
       if (!playerData.value) return;
       const selfData = getSelfData(gamerTag);
 
@@ -223,6 +250,11 @@ export async function useConnectSkyway(gamerTag: string) {
         }
         hasPhone = selfData.hasTelephone;
 
+        if(selfData.mute != 0 && selfData.mute != isMute) {
+          emit('mute', selfData.mute);
+        }
+        isMute = selfData.mute;
+
         const distanceData = getDistance(selfData);
         playerVolume = calcPlayerVolume(selfData, distanceData);
         subscribeMap.forEach(async (member, name) => {
@@ -233,13 +265,13 @@ export async function useConnectSkyway(gamerTag: string) {
             if (shouldSubscribe) {
               if (!me.subscriptions.some(sub => sub.id === member.sub!) &&
                 room.publications.includes(member.pub!)) {
-                subscribeAttach(member.pub!);
+                subscribeAttach(member.pub!).catch((err) => {});
               }
-            } else if (me.subscriptions.some(sub => sub.id === member.sub!)) {
-              await me.unsubscribe(member.sub!);
+            } else if (me.subscriptions.some(sub => sub.id === member.sub!) && playerVolume.get(name)! == 0) {
+              await me.unsubscribe(member.sub!).catch((err) => {});
+              unsubscribeCleanup(name);
             }
           } catch (err) {
-            console.log(err);
           }
         })
       } else {
@@ -250,11 +282,12 @@ export async function useConnectSkyway(gamerTag: string) {
             if (adminSpeaker.value.has(name)) {
               if (!me.subscriptions.find(sub => sub.id == member.sub!) &&
                 room.publications.find(pub => pub == member.pub!)) {
-                subscribeAttach(member.pub!)
+                subscribeAttach(member.pub!).catch((err) => {});
               }
             } else {
               if (me.subscriptions.find(sub => sub.id == member.sub!)) {
-                await me.unsubscribe(member.sub!);
+                me.unsubscribe(member.sub!).catch((err) => {});
+                unsubscribeCleanup(name);
               }
             }
           } catch (err) {
@@ -264,28 +297,33 @@ export async function useConnectSkyway(gamerTag: string) {
       }
     })
 
-    exitOn('exit', async () => {
+    on('exit', async () => {
       subscribeMap.forEach((e, key) => unsubscribeCleanup(key));
+      subscribeMap.clear();
+      userList.value.splice(0);
+      nearbyUserList.value.splice(0);
 
       room.onStreamPublished.removeAllListeners();
       room.onMemberLeft.removeAllListeners();
 
-      cusOff('event');
-      exitOff('exit');
+      off('dataCycle');
+      off('exit');
 
       await me.leave();
     })
 
     const leftMemberDettach = (name: string) => {
       const pubName = name.replace(/....__..__._../g, ' ');
+      const index = userList.value.findIndex(user => user.gamerTag === name);
+      userList.value.splice(index, 1);
 
       unsubscribeCleanup(pubName);
     }
 
     const unsubscribeCleanup = (name: string) => {
-      const index = userList.value.findIndex(user => user.gamerTag === name);
+      const index = nearbyUserList.value.findIndex(user => user.gamerTag === name);
       if (index > -1) {
-        const userInfo = userList.value[index];
+        const userInfo = nearbyUserList.value[index];
 
         // Audioオブジェクトの再生停止とリソース解放
         userInfo.audio.pause();
@@ -297,14 +335,13 @@ export async function useConnectSkyway(gamerTag: string) {
         userInfo.analyser.disconnect();
         userInfo.destination.stream.getTracks().forEach(track => track.stop());
 
-        // リストから削除
-        userList.value.splice(index, 1);
+        subscribeMap.get(name)!.sub = '';
+        nearbyUserList.value.splice(index, 1)
       }
-      subscribeMap.delete(name);
     }
 
-    room.publications.forEach(subscribeAttach);
-    room.onStreamPublished.add(async (e) => subscribeAttach(e.publication));
+    room.publications.forEach(addJoinMember);
+    room.onStreamPublished.add(async (e) => addJoinMember(e.publication));
     room.onMemberLeft.add(async (e) => leftMemberDettach(e.member.name!));
   }
 

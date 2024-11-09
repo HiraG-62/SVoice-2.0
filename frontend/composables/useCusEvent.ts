@@ -1,7 +1,9 @@
 import mitt from 'mitt';
 
 type Events = {
-  event: string
+  dataCycle: string,
+  exit: string,
+  mute: number
 }
 
 const emitter = mitt<Events>();
@@ -11,19 +13,5 @@ export function useCusEvent() {
     on: emitter.on,
     off: emitter.off,
     emit: emitter.emit
-  }
-}
-
-type Exit = {
-  exit: string
-}
-
-const exitEmitter = mitt<Exit>();
-
-export function useExitEvent() {
-  return {
-    on: exitEmitter.on,
-    off: exitEmitter.off,
-    emit: exitEmitter.emit
   }
 }

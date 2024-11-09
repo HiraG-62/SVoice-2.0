@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node backendServer.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "NODE_ENV=prod node backendServer.js",
+    "dev": "NODE_ENV=dev node backendServer.js"
   },
   "author": "",
   "license": "ISC",

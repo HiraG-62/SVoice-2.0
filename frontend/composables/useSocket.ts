@@ -1,5 +1,5 @@
 import { Socket } from 'socket.io-client'
-import { useCusEvent, useExitEvent } from './useCusEvent';
+import { useCusEvent } from './useCusEvent';
 
 let socket: Socket;
 
@@ -7,8 +7,7 @@ export async function useConnectSocket() {
   const { $socket } = useNuxtApp();
   socket = $socket as Socket;
 
-  const { emit: cusEmit } = useCusEvent();
-  const { emit: exitEmit } = useExitEvent();
+  const { emit } = useCusEvent();
 
   const {
     gamerTag,
@@ -29,7 +28,7 @@ export async function useConnectSocket() {
 
   socket.on('playerData', (data) => {
     playerData.value = data;
-    cusEmit('event', 'change');
+    emit('dataCycle', 'change');
   })
 
   socket.on('changeSetting', async () => {
@@ -41,7 +40,7 @@ export async function useConnectSocket() {
   })
 
   socket.on('kicked', () => {
-    exitEmit('exit', 'exit');
+    emit('exit', 'exit');
     useDisconnectSocket();
 
     isSpeaking.value = false;

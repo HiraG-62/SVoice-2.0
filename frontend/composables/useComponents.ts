@@ -40,7 +40,8 @@ export function useComponents() {
   const noiseSupNode = useState<AudioWorkletNode | null>('noiseSupNode', () => null);
   const micDest = useState<MediaStreamAudioDestinationNode | null>('micDest', () => null);
 
-  const userList = useState<UserInfo[]>('userList', () => reactive([]));
+  const userList = useState<JoinUserInfo[]>('userList', () => reactive([]));
+  const nearbyUserList = useState<UserInfo[]>('nearbyUserList', () => reactive([]));
 
   const ingameSettings = useState<ingameSettings | null>('ingameSettings', () => null);
   const playerData = useState<playerData[]>('playerData', () => []);
@@ -89,6 +90,7 @@ export function useComponents() {
     noiseSupNode,
     micDest,
     userList,
+    nearbyUserList,
     ingameSettings,
     playerData,
     isSpeaking,

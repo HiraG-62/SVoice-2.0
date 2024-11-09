@@ -8,3 +8,8 @@ interface UserInfo {
   analyser: AnalyserNode;
   audio: HTMLAudioElement;
 }
+
+interface JoinUserInfo {
+  gamerTag: string;
+  gain: number;
+}

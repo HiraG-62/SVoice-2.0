@@ -1,5 +1,6 @@
 const express = require('express');
-const { createServer } = require('https');
+const http = require('http');
+const https = require('https');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
@@ -8,6 +9,7 @@ const { joinVoiceChannel } = require('@discordjs/voice');
 const { getData } = require('./express')
 
 require('dotenv').config();
+const isDevelopment = process.env.NODE_ENV == 'dev';
 
 async function startDiscordServer() {
   const {
@@ -109,19 +111,23 @@ async function startDiscordServer() {
 
   
   const app = express();
+  let server;
 
   app.use(express.json());
-  
   app.use(cors({
-    origin: 'https://kei-server.com',
+    origin: process.env.SERVER_URL,
     credentials: true,
     optionsSuccessStatus: 200
   }));
-  
-  const httpServer = createServer({
-    key: fs.readFileSync('./key/privkey.pem'),
-    cert: fs.readFileSync('./key/fullchain.pem')
-  }, app);
+
+  if(isDevelopment) {
+    server = http.createServer(app);
+  } else {
+    server = https.createServer({
+      key: fs.readFileSync('./key/privkey.pem'),
+      cert: fs.readFileSync('./key/fullchain.pem')
+    }, app);
+  }
 
 
   app.get('/getUserName', async (req, res) => {
@@ -224,7 +230,7 @@ async function startDiscordServer() {
     console.log('Discord server running on port 5000');
   })
 
-  httpServer.listen(1234, () => {
+  server.listen(1234, () => {
     console.log('Discord server running on port 1234');
   })
 }

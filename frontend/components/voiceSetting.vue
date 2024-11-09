@@ -8,7 +8,9 @@ const {
   micIndicatorMax,
   micIndicatorMin,
   isMicTest,
+  isNoiseSuppression,
   isExtendsMic,
+  isJoining,
   phoneLevel,
   phoneMax,
   phoneMin,
@@ -63,6 +65,10 @@ const toggleMicTest = async () => {
   }
 }
 
+const toggleNoiseSuppression = () => {
+  useNoiseSuppression();
+}
+
 watch(selectedInput, async () => {
   await useChangeMicMedia(isMicTest.value);
 })
@@ -78,11 +84,19 @@ watch(phoneLevel, async () => {
     <v-row justify="center" no-gutters>
       <v-col cols="12" sm="6" md="4" lg="3" xl="3">
         <v-list-item>
-          <v-list-item-subtitle>入力デバイス</v-list-item-subtitle>
-          <v-select v-model="selectedInput" :items="audioInputs" item-value="label" item-title="label" return-object variant="outlined"></v-select>
+          <v-list-item-subtitle>入力デバイス<span v-show="isJoining" class="text-red ml-4">※入室後は変更できません</span></v-list-item-subtitle>
+          <v-select :disabled="isJoining" v-model="selectedInput" :items="audioInputs" item-value="label" item-title="label" return-object variant="outlined"></v-select>
         </v-list-item>
         <v-list-item>
-          <v-list-item-subtitle>入力音量</v-list-item-subtitle>
+          <v-list-item-subtitle>
+            入力音量
+            <span @click="clickExtendsMic" style="cursor: pointer;" class="ml-10">
+              上限拡張
+              <v-icon :color="isExtendsMic ? 'red' : ''">
+                {{ isExtendsMic ? 'mdi-lock-open-variant' : 'mdi-lock' }}
+              </v-icon>
+            </span>
+          </v-list-item-subtitle>
           <v-slider v-model="micLevel" :color="themeColorLight(2).value" :min="micMin" :max="micMax" :step="0.1"
             style="padding-left: 15px;">
             <template #append>
@@ -90,18 +104,12 @@ watch(phoneLevel, async () => {
                 type="number" hide-details single-line></v-text-field>
             </template>
           </v-slider>
-          <v-card-text @click="clickExtendsMic" class="pt-0" style="cursor: pointer;">
-            出力拡張
-            <v-icon :color="isExtendsMic ? 'red' : ''">
-              {{ isExtendsMic ? 'mdi-lock-open-variant' : 'mdi-lock' }}
-            </v-icon>
-          </v-card-text>
         </v-list-item>
       </v-col>
       <v-col cols="12" sm="6" md="4" lg="3" xl="3">
         <v-list-item>
           <v-list-item-subtitle>出力デバイス<span class="text-red ml-4">※変更不可</span></v-list-item-subtitle>
-          <v-select v-model="selectedOutput" :items="audioOutputs" item-value="label" item-title="label" :readonly="true" variant="outlined"></v-select>
+          <v-select disabled v-model="selectedOutput" :items="audioOutputs" item-value="label" item-title="label" :readonly="true" variant="outlined"></v-select>
         </v-list-item>
         <v-list-item>
           <v-list-item-subtitle>出力音量</v-list-item-subtitle>
@@ -119,6 +127,7 @@ watch(phoneLevel, async () => {
       <v-col cols="12" sm="10" md="7" lg="5" xl="5">
         <v-list-item>
           <v-list-item-subtitle>マイクテスト</v-list-item-subtitle>
+          <v-switch @change="toggleNoiseSuppression" v-model="isNoiseSuppression" :color="themeColor" label="ノイズ抑制" inset class="ml-4"/>
           <v-slider v-model="micIndicator" :min="micIndicatorMin" :max="micIndicatorMax" :color="micIndicatorColor"
             thumb-size="none" readonly>
             <template #prepend>
