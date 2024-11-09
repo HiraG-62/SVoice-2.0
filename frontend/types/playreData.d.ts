@@ -11,6 +11,7 @@ interface playerData {
   transceiverType: number,
   transceiverNumber: number,
   mute: number,
+  voiceRangeOutput: number,
   volumeOutput: number,
   voiceRangeInput: number,
   volumeInput: number,

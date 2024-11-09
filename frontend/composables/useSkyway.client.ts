@@ -341,8 +341,8 @@ export async function useConnectSkyway(gamerTag: string) {
     let min: number;
     let max: number;
     let coef = 1;
-    let output = 1;
-    let input = 1;
+    let range = 1;
+    let volume = 1;
     let distanceVolume = 0;
 
     const option = ingameSettings.value!;
@@ -381,16 +381,17 @@ export async function useConnectSkyway(gamerTag: string) {
         max = option.general.value.maxDistance.value;
       }
 
-      output = oppData.volumeOutput / 100;
+      range = (oppData.voiceRangeOutput / 100) * (selfData.voiceRangeInput / 100);
+      volume = (oppData.volumeOutput / 100) * (selfData.volumeInput / 100);
 
-      max *= output;
-      min *= output;
+      max *= range;
+      min *= range;
 
       if (oppDistance <= min) distanceVolume = 1;
       else if (oppDistance >= max) distanceVolume = option.general.value.minVolume.value;
       else distanceVolume = (1 - (oppDistance - min) / (max - min));
 
-      return distanceVolume * coef;
+      return distanceVolume * coef * volume;
     }
 
     playerData.value.forEach(player => {
