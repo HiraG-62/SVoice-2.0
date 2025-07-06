@@ -1,5 +1,6 @@
 import type { LocalAudioStream, LocalSFURoomMember, RoomPublication } from '@skyway-sdk/room';
 import { useCusEvent } from './useCusEvent';
+import type { WatchHandle } from 'vue';
 
 export async function useConnectSkyway(gamerTag: string) {
   if (typeof window !== 'undefined' && !import.meta.env.SSR) {
@@ -107,6 +108,8 @@ export async function useConnectSkyway(gamerTag: string) {
     }
 
     const subscribeMap = new Map<string, { pub: RoomPublication, sub: string }>();
+    const gainMap = new Map<string, Ref<number>>();
+    const watchMap = new Map<string, WatchHandle>();
     let playerVolume = new Map<string, number>();
     let hasPhone = 0;
     let isMute = 0;
@@ -119,7 +122,7 @@ export async function useConnectSkyway(gamerTag: string) {
 
       subscribeMap.set(pubName, { pub: publication, sub: '' });
 
-      const gain = Number(localStorage.getItem(pubName)) || 1;
+      const gain = Number(localStorage.getItem(pubName) || 1);
 
       const userInfo = reactive({
         gamerTag: pubName,
@@ -131,7 +134,7 @@ export async function useConnectSkyway(gamerTag: string) {
       watch(userInfo, (newInfo) => {
         const isNearby = nearbyUserList.value.find(user => user.gamerTag == pubName);
         if(isNearby) {
-          isNearby.gain = userInfo.gain;
+          isNearby.gain = Number(userInfo.gain);
         }
         localStorage.setItem(pubName, userInfo.gain.toString());
       })
@@ -194,12 +197,13 @@ export async function useConnectSkyway(gamerTag: string) {
       newAudio.muted = false;
       newAudio.srcObject = destination.stream;
 
-      console.log(Number(localStorage.getItem(pubName)))
-      const gain = Number(localStorage.getItem(pubName)) ?? 1;
+      const gain = ref(Number(localStorage.getItem(pubName) || 1));
+
+      gainMap.set(pubName, gain);
 
       const userInfo = reactive({
         gamerTag: pubName,
-        gain: ref(gain),
+        gain: gain,
         voice: isVoiceDetected,
         source,
         gainNode,
@@ -207,7 +211,7 @@ export async function useConnectSkyway(gamerTag: string) {
         analyser,
         audio: newAudio
       })
-      nearbyUserList.value.push(userInfo)
+      nearbyUserList.value.push(userInfo);
 
       const changeGain = computed(() => {
         if (playerData.value) {
@@ -223,16 +227,20 @@ export async function useConnectSkyway(gamerTag: string) {
       gainNode.gain.value = changeGain.value
 
       watch(changeGain, (newInfo) => {
-        gainNode.gain.value = changeGain.value
+        gainNode.gain.value = changeGain.value;
+        localStorage.setItem(pubName, gain.value.toString());
       })
-
-      watch(userInfo, (newInfo) => {
-        const user = userList.value.find(user => user.gamerTag = pubName);
-        user!.gain = userInfo.gain
-        localStorage.setItem(pubName, userInfo.gain.toString());
-      })
-
     }
+
+    gainMap.forEach((user, key) => {
+      const w = watch(user, (newGain) => {
+        const u = userList.value.find(user => user.gamerTag == key);
+        u!.gain = user.value;
+        localStorage.setItem(key, user.value.toString());
+      });
+
+      watchMap.set(key, w);
+    })
 
     on('dataCycle', async () => {
       if (!playerData.value) return;
@@ -269,6 +277,7 @@ export async function useConnectSkyway(gamerTag: string) {
               }
             } else if (me.subscriptions.some(sub => sub.id === member.sub!) && playerVolume.get(name)! == 0) {
               await me.unsubscribe(member.sub!).catch((err) => {});
+              watchMap.get(name);
               unsubscribeCleanup(name);
             }
           } catch (err) {
@@ -336,7 +345,7 @@ export async function useConnectSkyway(gamerTag: string) {
         userInfo.destination.stream.getTracks().forEach(track => track.stop());
 
         subscribeMap.get(name)!.sub = '';
-        nearbyUserList.value.splice(index, 1)
+        nearbyUserList.value.splice(index, 1);
       }
     }
 

@@ -19,11 +19,11 @@ async function startDiscordServer() {
     DISCORD_SERVER_ROLE_ID_PHONE,
     DISCORD_SERVER_ROLE_ID_JOIN
   } = process.env;
-  
+
   const tokens = JSON.parse(fs.readFileSync(path.join(__dirname, '../env', 'tokens.json')))
   const bots = new Array();
 
-  for(let token of tokens.tokens) {
+  for (let token of tokens.tokens) {
     const bot = new Client({
       intents: [
         GatewayIntentBits.Guilds,
@@ -60,41 +60,43 @@ async function startDiscordServer() {
   const displayJoinMember = async () => {
     try {
       const data = getData();
-      if(data) {
+      if (data) {
         playerCount = data.length;
       } else {
-        playerCount = 0;
+        playerCount = 9999;
       }
 
       if (count == playerCount || (count >= 20 && playerCount > 20)) {
-          setTimeout(displayJoinMember, 10 * 1000);
-          return;
+        setTimeout(displayJoinMember, 10 * 1000);
+        return;
       }
-  
+
       connection.destroy();
-  
-      if (playerCount >= 20) {
-          guild = await bots[20].guilds.fetch(DISCORD_SERVER_ID);
+
+      if (playerCount == 9999) {
+        guild = await bots[21].guilds.fetch(DISCORD_SERVER_ID);
+      } else if (playerCount >= 20) {
+        guild = await bots[20].guilds.fetch(DISCORD_SERVER_ID);
       } else {
-          guild = await bots[playerCount].guilds.fetch(DISCORD_SERVER_ID);
+        guild = await bots[playerCount].guilds.fetch(DISCORD_SERVER_ID);
       }
-  
+
       voiceChannel = guild.channels.cache.get(DISCORD_SERVER_ROOM_ID);
-  
+
       connection = joinVoiceChannel({
-          channelId: voiceChannel.id,
-          guildId: guild.id,
-          adapterCreator: guild.voiceAdapterCreator,
+        channelId: voiceChannel.id,
+        guildId: guild.id,
+        adapterCreator: guild.voiceAdapterCreator,
       });
-  
+
       count = playerCount;
       setTimeout(displayJoinMember, 10 * 1000);
-    } catch(err) {
+    } catch (err) {
       console.log(err);
     }
-};
+  };
 
-  bots[bots.length-1].once('ready', async () => {
+  bots[bots.length - 1].once('ready', async () => {
     await new Promise(resolve => setTimeout(resolve, 3000));
 
     guild = await bots[0].guilds.fetch(DISCORD_SERVER_ID);
@@ -109,7 +111,7 @@ async function startDiscordServer() {
     displayJoinMember();
   })
 
-  
+
   const app = express();
   let server;
 
@@ -120,7 +122,7 @@ async function startDiscordServer() {
     optionsSuccessStatus: 200
   }));
 
-  if(isDevelopment) {
+  if (isDevelopment) {
     server = http.createServer(app);
   } else {
     server = https.createServer({
@@ -131,7 +133,7 @@ async function startDiscordServer() {
 
 
   app.get('/getUserName', async (req, res) => {
-    
+
     try {
       const id = req.query.id.toString();
 
@@ -144,7 +146,7 @@ async function startDiscordServer() {
       const match = discordName?.match(regex);
       const matchNickName = match ? match[1] : null;
 
-      if(matchNickName == null) {
+      if (matchNickName == null) {
         throw 'Discord NickName Error'
       }
 
@@ -153,7 +155,63 @@ async function startDiscordServer() {
       res.status(200).json(matchNickName);
 
     } catch (err) {
-      res.status(500).json({ error: 'Discord name inconsistency error'})
+      res.status(500).json({ error: 'Discord name inconsistency error' })
+    }
+  })
+
+  app.post('/checkJoinPass', async (req, res) => {
+    const body = req.body;
+    
+    if(body.pass == "syakasaba_4") {
+      res.status(200).json(true);
+    } else {
+      res.status(200).json(false);
+    }
+  })
+
+  app.get('/setJoinRole', async (req, res) => {
+    try {
+      const id = req.query.id;
+
+      const guild = await bots[botIndex].guilds.fetch(DISCORD_SERVER_ID);
+      const member = await guild.members.fetch(id);
+
+      const hasPhone = member.roles.cache.has(DISCORD_SERVER_ROLE_ID_JOIN);
+
+      if (!hasPhone) {
+        await member.roles.add(DISCORD_SERVER_ROLE_ID_JOIN);
+      }
+
+      nextBot();
+
+      res.status(200);
+    } catch (err) {
+      console.error(err);
+      res.status(500);
+    }
+  })
+
+  app.get('/getJoinRole', async (req, res) => {
+    try {
+      const id = req.query.id;
+
+      const guild = await bots[botIndex].guilds.fetch(DISCORD_SERVER_ID);
+      const member = await guild.members.fetch(id);
+
+      const hasJoin = member.roles.cache.has(DISCORD_SERVER_ROLE_ID_JOIN);
+
+      let auth = false;
+
+      if (!(!hasJoin)) {
+        auth = true;
+      }
+
+      nextBot();
+
+      res.status(200).json(auth);
+    } catch (err) {
+      console.log(err);
+      res.status(500);
     }
   })
 
@@ -169,14 +227,14 @@ async function startDiscordServer() {
 
       let auth = false;
 
-      if(!(!hasAdmin)) {
+      if (!(!hasAdmin)) {
         auth = true;
       }
 
       nextBot();
 
       res.status(200).json(auth);
-    } catch(err) {
+    } catch (err) {
       console.log(err);
       res.status(500);
     }
@@ -198,7 +256,7 @@ async function startDiscordServer() {
       nextBot();
 
       res.status(200);
-    } catch(err) {
+    } catch (err) {
       console.error(err);
       res.status(500);
     }
@@ -220,7 +278,7 @@ async function startDiscordServer() {
       nextBot();
 
       res.status(200);
-    } catch(err) {
+    } catch (err) {
       console.error(err);
       res.status(500);
     }

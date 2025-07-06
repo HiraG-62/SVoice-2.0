@@ -194,9 +194,7 @@ export async function useAudioDevice() {
   const devices = await navigator.mediaDevices.enumerateDevices();
   audioInputs.value = devices
     .filter(device =>
-      device.kind === 'audioinput' &&
-      device.deviceId !== 'default' &&
-      device.deviceId !== 'communications'
+      device.kind === 'audioinput'
     )
     .map(device => ({
       ...device,

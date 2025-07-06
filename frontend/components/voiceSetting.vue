@@ -133,7 +133,7 @@ watch(phoneLevel, async () => {
             <template #prepend>
               <v-btn @click="toggleMicTest" :color="isMicTest ? themeColorLight(3).value : '#ddd'" width="100">
                 {{ isMicTest ? 'テスト中' : 'テスト' }}
-                <v-icon @click="isMicTest = !isMicTest" :color="isMicTest ? '' : 'red'">
+                <v-icon :color="isMicTest ? '' : 'red'">
                   {{ isMicTest ? 'mdi-microphone' : 'mdi-microphone-off' }}
                 </v-icon>
               </v-btn>
