@@ -107,7 +107,7 @@ export async function useConnectSkyway(gamerTag: string) {
       });
     }
 
-    const subscribeMap = new Map<string, { pub: RoomPublication, sub: string }>();
+    const subscribeMap = new Map<string, { pub: RoomPublication, sub: string | null}>();
     const gainMap = new Map<string, Ref<number>>();
     const watchMap = new Map<string, WatchHandle>();
     let playerVolume = new Map<string, number>();
@@ -147,12 +147,21 @@ export async function useConnectSkyway(gamerTag: string) {
 
       if (publisher.id === me.id) return;
 
-      const { stream, subscription } = await me.subscribe(publication.id);
-      subscribeMap.set(pubName, { pub: publication, sub: subscription.id });
+      let audioStream;
+      let roomSubscription;
+      try {
+        const { stream, subscription } = await me.subscribe(publication.id);
+        audioStream = stream;
+        roomSubscription = subscription;
+      } catch (err) {
+        return;
+      }
 
-      if (!(stream instanceof RemoteAudioStream)) return;
+      subscribeMap.set(pubName, { pub: publication, sub: roomSubscription.id });
 
-      const newStream = new MediaStream([stream.track]);
+      if (!(audioStream instanceof RemoteAudioStream)) return;
+
+      const newStream = new MediaStream([audioStream.track]);
 
       const tempAudio = new Audio();
       tempAudio.controls = true;
@@ -249,6 +258,7 @@ export async function useConnectSkyway(gamerTag: string) {
       if (selfData) {
         isJoiningIngame.value = true;
 
+        // スマホ所持確認
         if (hasPhone != selfData.hasTelephone) {
           if (hasPhone == 0) {
             $fetch(`${config.public.server.api.sslurl}/setPhoneRole?id=${discordId}`)
@@ -258,29 +268,38 @@ export async function useConnectSkyway(gamerTag: string) {
         }
         hasPhone = selfData.hasTelephone;
 
+        // ミュート確認
         if(selfData.mute != 0 && selfData.mute != isMute) {
           emit('mute', selfData.mute);
         }
         isMute = selfData.mute;
 
+        // 距離による音量計算
         const distanceData = getDistance(selfData);
         playerVolume = calcPlayerVolume(selfData, distanceData);
         subscribeMap.forEach(async (member, name) => {
           try {
+            // 管理者か音量が0以上の場合は接続
             const shouldSubscribe =
               adminSpeaker.value.has(name) || (playerVolume.get(name) ?? 0) > 0;
 
+            // 接続
             if (shouldSubscribe) {
               if (!me.subscriptions.some(sub => sub.id === member.sub!) &&
                 room.publications.includes(member.pub!)) {
-                subscribeAttach(member.pub!).catch((err) => {});
+                subscribeAttach(member.pub!).catch((err) => {
+                  console.log("subscribeAttach error", err);
+                });
               }
             } else if (me.subscriptions.some(sub => sub.id === member.sub!) && playerVolume.get(name)! == 0) {
-              await me.unsubscribe(member.sub!).catch((err) => {});
+              await me.unsubscribe(member.sub!).catch((err) => {
+                console.log("unsubscribe error", err);
+              });
               watchMap.get(name);
               unsubscribeCleanup(name);
             }
           } catch (err) {
+            
           }
         })
       } else {
@@ -344,7 +363,7 @@ export async function useConnectSkyway(gamerTag: string) {
         userInfo.analyser.disconnect();
         userInfo.destination.stream.getTracks().forEach(track => track.stop());
 
-        subscribeMap.get(name)!.sub = '';
+        subscribeMap.get(name)!.sub = null;
         nearbyUserList.value.splice(index, 1);
       }
     }
