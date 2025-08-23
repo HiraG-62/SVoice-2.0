@@ -42,6 +42,7 @@ export function useComponents() {
 
   const userList = useState<JoinUserInfo[]>('userList', () => reactive([]));
   const nearbyUserList = useState<UserInfo[]>('nearbyUserList', () => reactive([]));
+  const subscribeMap = useState<Map<string, { pub: any, sub: string | null }>>('subscribeMap', () => new Map());
 
   const ingameSettings = useState<ingameSettings | null>('ingameSettings', () => null);
   const playerData = useState<playerData[]>('playerData', () => []);
@@ -91,6 +92,7 @@ export function useComponents() {
     micDest,
     userList,
     nearbyUserList,
+    subscribeMap,
     ingameSettings,
     playerData,
     isSpeaking,
