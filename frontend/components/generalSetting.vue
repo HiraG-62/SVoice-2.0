@@ -9,20 +9,6 @@ const logout = () => {
   socket.disconnect();
   clear();
 }
-
-const sendDebug = () => {
-  const socket = $socket as Socket;
-  const { nearbyUserList, subscribeMap } = useComponents();
-  
-  const debugData = {
-    nearbyUserList: nearbyUserList.value,
-    subscribeMap: Array.from(subscribeMap.value.entries()),
-    timestamp: new Date().toISOString()
-  };
-  
-  console.log('Debug Data:', debugData);
-  socket.emit('debug', debugData);
-}
 </script>
 
 <template>
@@ -37,13 +23,7 @@ const sendDebug = () => {
               </v-list-item-subtitle>
               <v-btn @click="logout" color="red">ログアウト</v-btn>
             </v-list-item>
-            <v-list-item>
-              <v-list-item-subtitle>
-                デバッグ用 <span class="text-red">※運営の指示以外で押さないでください</span>
-              </v-list-item-subtitle>
-              <v-btn @click="sendDebug" color="red">送信</v-btn>
-            </v-list-item>
-            </v-col>
+          </v-col>
         </v-row>
       </template>
     </AuthState>

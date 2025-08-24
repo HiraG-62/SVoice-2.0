@@ -28,7 +28,6 @@ export async function useConnectSkyway(gamerTag: string) {
       isJoiningIngame,
       userList,
       nearbyUserList,
-      subscribeMap,
       playerData,
       adminSpeaker
     } = useComponents();
@@ -108,7 +107,7 @@ export async function useConnectSkyway(gamerTag: string) {
       });
     }
 
-
+    const subscribeMap = new Map<string, { pub: RoomPublication, sub: string | null}>();
     const gainMap = new Map<string, Ref<number>>();
     const watchMap = new Map<string, WatchHandle>();
     let playerVolume = new Map<string, number>();
@@ -121,7 +120,7 @@ export async function useConnectSkyway(gamerTag: string) {
 
       if (publisher.id === me.id) return;
 
-      subscribeMap.value.set(pubName, { pub: publication, sub: '' });
+      subscribeMap.set(pubName, { pub: publication, sub: '' });
 
       const gain = Number(localStorage.getItem(pubName) || 1);
 
@@ -158,7 +157,7 @@ export async function useConnectSkyway(gamerTag: string) {
         return;
       }
 
-      subscribeMap.value.set(pubName, { pub: publication, sub: roomSubscription.id });
+      subscribeMap.set(pubName, { pub: publication, sub: roomSubscription.id });
 
       if (!(audioStream instanceof RemoteAudioStream)) return;
 
@@ -278,7 +277,7 @@ export async function useConnectSkyway(gamerTag: string) {
         // 距離による音量計算
         const distanceData = getDistance(selfData);
         playerVolume = calcPlayerVolume(selfData, distanceData);
-        subscribeMap.value.forEach(async (member, name) => {
+        subscribeMap.forEach(async (member, name) => {
           try {
             // 管理者か音量が0以上の場合は接続
             const shouldSubscribe =
@@ -306,7 +305,7 @@ export async function useConnectSkyway(gamerTag: string) {
       } else {
         isJoiningIngame.value = false;
 
-        subscribeMap.value.forEach(async (member, name) => {
+        subscribeMap.forEach(async (member, name) => {
           try {
             if (adminSpeaker.value.has(name)) {
               if (!me.subscriptions.find(sub => sub.id == member.sub!) &&
@@ -327,8 +326,8 @@ export async function useConnectSkyway(gamerTag: string) {
     })
 
     on('exit', async () => {
-      subscribeMap.value.forEach((e, key) => unsubscribeCleanup(key));
-      subscribeMap.value.clear();
+      subscribeMap.forEach((e, key) => unsubscribeCleanup(key));
+      subscribeMap.clear();
       userList.value.splice(0);
       nearbyUserList.value.splice(0);
 
@@ -364,7 +363,7 @@ export async function useConnectSkyway(gamerTag: string) {
         userInfo.analyser.disconnect();
         userInfo.destination.stream.getTracks().forEach(track => track.stop());
 
-        subscribeMap.value.get(name)!.sub = null;
+        subscribeMap.get(name)!.sub = null;
         nearbyUserList.value.splice(index, 1);
       }
     }
