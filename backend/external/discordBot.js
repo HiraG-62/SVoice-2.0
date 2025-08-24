@@ -21,9 +21,9 @@ async function startDiscordServer() {
   } = process.env;
 
   const tokens = JSON.parse(fs.readFileSync(path.join(__dirname, '../env', 'tokens.json')))
-  const bots = new Array();
+  const bots = [];
 
-  for (let token of tokens.tokens) {
+  const loginWithRetry = async (token, index, delay = 60 * 1000) => {
     const bot = new Client({
       intents: [
         GatewayIntentBits.Guilds,
@@ -34,18 +34,32 @@ async function startDiscordServer() {
       ]
     });
 
-    bot.login(token);
-    bots.push(bot);
-  }
+    while (true) {
+      try {
+        await bot.login(token);
+        console.log(`✅ Bot #${index} logged in`);
+        bots.push(bot);
 
-  for (let bot of bots) {
-    bot.once('ready', async () => {
-      bot.user.setPresence({
-        status: 'invisible',
-        activities: []
-      });
-    })
-  }
+        bot.user.setPresence({ status: 'invisible', activities: [] });
+        return; // 成功したら次のボットへ
+      } catch (err) {
+        console.warn(`❌ Bot #${index} login failed. Retrying in ${delay / 1000}s...`);
+        // await new Promise(res => setTimeout(res, delay));
+      }
+    }
+  };
+
+  const loginBotsSequentially = async () => {
+    for (let i = 0; i < tokens.tokens.length; i++) {
+      const token = tokens.tokens[i];
+      await loginWithRetry(token, i); // 成功するまで待つ
+      // await new Promise(res => setTimeout(res, 500)); // 次のログインまで2秒待機
+    }
+
+    console.log(`✅ All bots logged in!`);
+  };
+
+  await loginBotsSequentially();
 
   let guild;
   let voiceChannel;
@@ -160,12 +174,17 @@ async function startDiscordServer() {
   })
 
   app.post('/checkJoinPass', async (req, res) => {
-    const body = req.body;
-    
-    if(body.pass == "syakasaba_4") {
-      res.status(200).json(true);
-    } else {
-      res.status(200).json(false);
+    try {
+      const body = req.body;
+
+      if (body.pass == "syakasaba_4") {
+        res.status(200).json(true);
+      } else {
+        res.status(200).json(false);
+      }
+    } catch (ex) {
+      console.log(ex);
+      res.status(500);
     }
   })
 
@@ -266,7 +285,7 @@ async function startDiscordServer() {
     try {
       const id = req.query.id;
 
-      const guild = await bot.guilds.fetch(DISCORD_SERVER_ID);
+      const guild = await bots[botIndex].guilds.fetch(DISCORD_SERVER_ID);
       const member = await guild.members.fetch(id);
 
       const hasPhone = member.roles.cache.has(DISCORD_SERVER_ROLE_ID_PHONE);
