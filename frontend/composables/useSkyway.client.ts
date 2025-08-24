@@ -1,6 +1,7 @@
 import type { LocalAudioStream, LocalSFURoomMember, RoomPublication } from '@skyway-sdk/room';
 import { useCusEvent } from './useCusEvent';
 import type { WatchHandle } from 'vue';
+import type { Socket } from 'socket.io-client';
 
 export async function useConnectSkyway(gamerTag: string) {
   if (typeof window !== 'undefined' && !import.meta.env.SSR) {
@@ -19,6 +20,7 @@ export async function useConnectSkyway(gamerTag: string) {
     const discordId = (session.value?.user as { discordId: string; discordAuth: boolean; gamerTag: string }).discordId;
 
     const { on, off, emit } = useCusEvent();
+    const { $socket } = useNuxtApp();
 
     const {
       audioContext,
@@ -113,6 +115,36 @@ export async function useConnectSkyway(gamerTag: string) {
     let playerVolume = new Map<string, number>();
     let hasPhone = 0;
     let isMute = 0;
+
+    on('debug', () => {
+      const socket = $socket as Socket;
+      const jpNowStr = new Intl.DateTimeFormat('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      }).format(new Date());
+
+      const debugData = {
+        timeStamp: jpNowStr,
+        sendUser: joinName,
+        nearbyUserList: nearbyUserList.value.map(user => ({
+          gamerTag: user.gamerTag,
+          gain: user.gain,
+          voice: user.voice,
+        })),
+        subscribeMap: Array.from(subscribeMap.entries()).map(([key, val]) => ({
+          key,
+          pub: val.pub ? {
+            publisherId: val.pub.id,
+          } : null,
+          sub: val.sub ?? null,
+        })),
+        playerVolume: Array.from(playerVolume.entries()),
+      }
+
+      console.log(debugData);
+      socket.emit('debug', debugData);
+    })
 
     const addJoinMember = async (publication: RoomPublication) => {
       const publisher = publication.publisher;

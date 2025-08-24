@@ -3,11 +3,16 @@ import type { Socket } from 'socket.io-client';
 
 const { loggedIn, clear } = useUserSession();
 const { $socket } = useNuxtApp()
+const { emit } = useCusEvent()
 
 const logout = () => {
   const socket = $socket as Socket;
   socket.disconnect();
   clear();
+}
+
+const sendDebug = () => {
+  emit('debug', 'debug');
 }
 </script>
 
@@ -22,6 +27,12 @@ const logout = () => {
                 Discord認証
               </v-list-item-subtitle>
               <v-btn @click="logout" color="red">ログアウト</v-btn>
+            </v-list-item>
+            <v-list-item>
+              <v-list-item-subtitle>
+                デバッグ用 <span class="text-red">※運営の指示以外で押さないでください</span>
+              </v-list-item-subtitle>
+              <v-btn @click="sendDebug" color="red">送信</v-btn>
             </v-list-item>
           </v-col>
         </v-row>

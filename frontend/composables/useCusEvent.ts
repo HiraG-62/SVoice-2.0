@@ -3,7 +3,8 @@ import mitt from 'mitt';
 type Events = {
   dataCycle: string,
   exit: string,
-  mute: number
+  mute: number,
+  debug: string
 }
 
 const emitter = mitt<Events>();
