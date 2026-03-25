@@ -25,9 +25,11 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
+    // サーバーサイドのみ（クライアントに露出しない）
+    skywayAppId: process.env.NUXT_SKYWAY_APP_ID || '',
+    skywaySecretKey: process.env.NUXT_SKYWAY_SECRET_KEY || '',
+    apiSecret: process.env.NUXT_API_SECRET || '',
     public: {
-      skywayAppId: process.env.NUXT_PUBLIC_SKYWAY_APP_ID || '',
-      skywaySecretKey: process.env.NUXT_PUBLIC_SKYWAY_SECRET_KEY || '',
       server: {
         socket: {
           url: process.env.NUXT_PUBLIC_SERVER_SOCKET_URL || '',

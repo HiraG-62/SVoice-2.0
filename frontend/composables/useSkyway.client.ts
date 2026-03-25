@@ -33,9 +33,10 @@ export async function useConnectSkyway(gamerTag: string) {
       adminSpeaker
     } = useComponents();
 
-    const config = useRuntimeConfig();
-    const appId = config.public.skywayAppId as string;
-    const secretKey = config.public.skywaySecretKey as string;
+    // サーバーサイドから安全にSkyWay認証情報を取得
+    const skywayConfig = await $fetch('/api/getSkywayToken');
+    const appId = skywayConfig.appId as string;
+    const secretKey = skywayConfig.secretKey as string;
 
 
     const token = new SkyWayAuthToken({
@@ -341,9 +342,9 @@ export async function useConnectSkyway(gamerTag: string) {
           // スマホ所持確認
           if (hasPhone != selfData.hasTelephone) {
             if (hasPhone == 0) {
-              $fetch(`${config.public.server.api.sslurl}/setPhoneRole?id=${discordId}`)
+              $fetch(`/api/setPhoneRole?id=${discordId}`)
             } else {
-              $fetch(`${config.public.server.api.sslurl}/removePhoneRole?id=${discordId}`)
+              $fetch(`/api/removePhoneRole?id=${discordId}`)
             }
           }
           hasPhone = selfData.hasTelephone;
@@ -412,8 +413,8 @@ export async function useConnectSkyway(gamerTag: string) {
   const getSelfData = (selfName: string) => {
     const { playerData } = useComponents();
 
-    const self = playerData.value.find(player => player.name == selfName)!;
-    return self;
+    if (!playerData.value || !Array.isArray(playerData.value)) return undefined;
+    return playerData.value.find(player => player.name == selfName);
   }
 
   const getDistance = (selfData: playerData) => {

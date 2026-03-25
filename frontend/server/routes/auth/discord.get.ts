@@ -7,10 +7,18 @@ export default defineOAuthDiscordEventHandler({
     const discordId = user.id;
     let gamerTag: Response;
     let discordAuth: Response;
-    
+
+    const apiHeaders = {
+      'x-api-secret': config.apiSecret
+    };
+
     try {
-      gamerTag = await $fetch(`${config.public.server.api.url}/getUserName?id=${discordId}`)
-      discordAuth = await $fetch(`${config.public.server.api.url}/checkAdminRole?id=${discordId}`)
+      gamerTag = await $fetch(`${config.public.server.api.url}/getUserName?id=${discordId}`, {
+        headers: apiHeaders
+      })
+      discordAuth = await $fetch(`${config.public.server.api.url}/checkAdminRole?id=${discordId}`, {
+        headers: apiHeaders
+      })
     } catch(err) {
       console.log(err);
       return sendRedirect(event, '/?error=discrod_nickname_error')

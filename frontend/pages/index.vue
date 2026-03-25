@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useDisconnectSocket } from '~/composables/useSocket';
-const config = useRuntimeConfig();
 
 const { user, session, loggedIn } = useUserSession();
 
@@ -41,17 +40,14 @@ const loginClick = async () => {
 }
 
 const joinAuthClick = async () => {
-  const res = await $fetch(`${config.public.server.api.sslurl}/checkJoinPass`, {
+  const res = await $fetch('/api/checkJoinPass', {
     method: 'post',
     body: { "pass": password.value }
   });
-  
+
   if(res) {
-    console.log('1')
-    await $fetch(`${config.public.server.api.sslurl}/setJoinRole?id=${discordId}`);
+    await $fetch(`/api/setJoinRole?id=${discordId}`);
     joinAuth.value = res as boolean;
-    console.log('test')
-    
   }
 }
 
@@ -82,7 +78,7 @@ const joinClick = async () => {
 
 onMounted(async () => {
   if (loggedIn) {
-    const res: boolean = await $fetch(`${config.public.server.api.sslurl}/getJoinRole?id=${discordId}`);
+    const res: boolean = await $fetch(`/api/getJoinRole?id=${discordId}`);
     joinAuth.value = res;
     await useAudio();
     await useAudioDevice();
