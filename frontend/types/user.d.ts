@@ -7,6 +7,7 @@ interface UserInfo {
   destination: MediaStreamAudioDestinationNode;
   analyser: AnalyserNode;
   audio: HTMLAudioElement;
+  stopAudioLevel?: () => void;
 }
 
 interface JoinUserInfo {

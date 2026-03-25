@@ -17,12 +17,24 @@ async function startDiscordServer() {
     DISCORD_SERVER_ROOM_ID,
     DISCORD_SERVER_ROLE_ID_ADMIN,
     DISCORD_SERVER_ROLE_ID_PHONE,
-    DISCORD_SERVER_ROLE_ID_JOIN
+    DISCORD_SERVER_ROLE_ID_JOIN,
+    JOIN_PASSWORD,
+    API_SECRET
   } = process.env;
+
+  if (!JOIN_PASSWORD) {
+    console.error('❌ JOIN_PASSWORD environment variable is not set');
+    process.exit(1);
+  }
+  if (!API_SECRET) {
+    console.error('❌ API_SECRET environment variable is not set');
+    process.exit(1);
+  }
 
   const tokens = JSON.parse(fs.readFileSync(path.join(__dirname, '../env', 'tokens.json')))
   const bots = [];
 
+  const MAX_LOGIN_RETRIES = 5;
   const loginWithRetry = async (token, index, delay = 60 * 1000) => {
     const bot = new Client({
       intents: [
@@ -34,19 +46,20 @@ async function startDiscordServer() {
       ]
     });
 
-    while (true) {
+    for (let attempt = 0; attempt < MAX_LOGIN_RETRIES; attempt++) {
       try {
         await bot.login(token);
         console.log(`✅ Bot #${index} logged in`);
         bots.push(bot);
 
         bot.user.setPresence({ status: 'invisible', activities: [] });
-        return; // 成功したら次のボットへ
+        return;
       } catch (err) {
-        console.warn(`❌ Bot #${index} login failed. Retrying in ${delay / 1000}s...`);
-        // await new Promise(res => setTimeout(res, delay));
+        console.warn(`❌ Bot #${index} login failed (attempt ${attempt + 1}/${MAX_LOGIN_RETRIES}). Retrying in ${delay / 1000}s...`);
+        await new Promise(res => setTimeout(res, delay));
       }
     }
+    console.error(`❌ Bot #${index} login failed after ${MAX_LOGIN_RETRIES} attempts. Skipping.`);
   };
 
   const loginBotsSequentially = async () => {
@@ -74,10 +87,11 @@ async function startDiscordServer() {
   const displayJoinMember = async () => {
     try {
       const data = getData();
+      let playerCount;
       if (data) {
         playerCount = data.length;
       } else {
-        playerCount = 9999;
+        playerCount = 0;
       }
 
       if (count == playerCount || (count >= 20 && playerCount > 20)) {
@@ -85,16 +99,26 @@ async function startDiscordServer() {
         return;
       }
 
-      connection.destroy();
-
-      if (playerCount == 9999) {
-        guild = await bots[21].guilds.fetch(DISCORD_SERVER_ID);
-      } else if (playerCount >= 20) {
-        guild = await bots[20].guilds.fetch(DISCORD_SERVER_ID);
-      } else {
-        guild = await bots[playerCount].guilds.fetch(DISCORD_SERVER_ID);
+      if (connection) {
+        connection.destroy();
       }
 
+      // Botインデックスを安全に決定（bots配列の範囲内に収める）
+      const maxIndex = bots.length - 1;
+      let targetIndex;
+      if (playerCount >= 20) {
+        targetIndex = Math.min(20, maxIndex);
+      } else {
+        targetIndex = Math.min(playerCount, maxIndex);
+      }
+
+      if (bots[targetIndex] == null) {
+        console.error(`Bot #${targetIndex} is not available`);
+        setTimeout(displayJoinMember, 10 * 1000);
+        return;
+      }
+
+      guild = await bots[targetIndex].guilds.fetch(DISCORD_SERVER_ID);
       voiceChannel = guild.channels.cache.get(DISCORD_SERVER_ROOM_ID);
 
       connection = joinVoiceChannel({
@@ -107,6 +131,7 @@ async function startDiscordServer() {
       setTimeout(displayJoinMember, 10 * 1000);
     } catch (err) {
       console.log(err);
+      setTimeout(displayJoinMember, 10 * 1000);
     }
   };
 
@@ -136,6 +161,20 @@ async function startDiscordServer() {
     optionsSuccessStatus: 200
   }));
 
+  // API認証ミドルウェア（内部API用）
+  const authenticateApi = (req, res, next) => {
+    const secret = req.headers['x-api-secret'];
+    if (!secret || secret !== API_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+  };
+
+  // ID検証ヘルパー
+  const validateDiscordId = (id) => {
+    return typeof id === 'string' && /^\d{17,20}$/.test(id);
+  };
+
   if (isDevelopment) {
     server = http.createServer(app);
   } else {
@@ -146,10 +185,14 @@ async function startDiscordServer() {
   }
 
 
-  app.get('/getUserName', async (req, res) => {
+  app.get('/getUserName', authenticateApi, async (req, res) => {
 
     try {
-      const id = req.query.id.toString();
+      const id = req.query.id?.toString();
+
+      if (!validateDiscordId(id)) {
+        return res.status(400).json({ error: 'Invalid Discord ID' });
+      }
 
       const guild = await bots[botIndex].guilds.fetch(DISCORD_SERVER_ID);
       const member = await guild.members.fetch(id);
@@ -173,95 +216,103 @@ async function startDiscordServer() {
     }
   })
 
-  app.post('/checkJoinPass', async (req, res) => {
+  app.post('/checkJoinPass', authenticateApi, async (req, res) => {
     try {
       const body = req.body;
 
-      if (body.pass == "syakasaba_4") {
+      if (typeof body.pass !== 'string') {
+        return res.status(400).json({ error: 'Invalid password format' });
+      }
+
+      if (body.pass === JOIN_PASSWORD) {
         res.status(200).json(true);
       } else {
         res.status(200).json(false);
       }
     } catch (ex) {
       console.log(ex);
-      res.status(500);
+      res.status(500).json({ error: 'Internal server error' });
     }
   })
 
-  app.get('/setJoinRole', async (req, res) => {
+  app.get('/setJoinRole', authenticateApi, async (req, res) => {
     try {
-      const id = req.query.id;
+      const id = req.query.id?.toString();
 
-      const guild = await bots[botIndex].guilds.fetch(DISCORD_SERVER_ID);
-      const member = await guild.members.fetch(id);
-
-      const hasPhone = member.roles.cache.has(DISCORD_SERVER_ROLE_ID_JOIN);
-
-      if (!hasPhone) {
-        await member.roles.add(DISCORD_SERVER_ROLE_ID_JOIN);
+      if (!validateDiscordId(id)) {
+        return res.status(400).json({ error: 'Invalid Discord ID' });
       }
-
-      nextBot();
-
-      res.status(200);
-    } catch (err) {
-      console.error(err);
-      res.status(500);
-    }
-  })
-
-  app.get('/getJoinRole', async (req, res) => {
-    try {
-      const id = req.query.id;
 
       const guild = await bots[botIndex].guilds.fetch(DISCORD_SERVER_ID);
       const member = await guild.members.fetch(id);
 
       const hasJoin = member.roles.cache.has(DISCORD_SERVER_ROLE_ID_JOIN);
 
-      let auth = false;
-
-      if (!(!hasJoin)) {
-        auth = true;
+      if (!hasJoin) {
+        await member.roles.add(DISCORD_SERVER_ROLE_ID_JOIN);
       }
 
       nextBot();
 
-      res.status(200).json(auth);
+      res.status(200).json({ success: true });
     } catch (err) {
-      console.log(err);
-      res.status(500);
+      console.error(err);
+      res.status(500).json({ error: 'Internal server error' });
     }
   })
 
-  app.get('/checkAdminRole', async (req, res) => {
+  app.get('/getJoinRole', authenticateApi, async (req, res) => {
+    try {
+      const id = req.query.id?.toString();
+
+      if (!validateDiscordId(id)) {
+        return res.status(400).json({ error: 'Invalid Discord ID' });
+      }
+
+      const guild = await bots[botIndex].guilds.fetch(DISCORD_SERVER_ID);
+      const member = await guild.members.fetch(id);
+
+      const hasJoin = member.roles.cache.has(DISCORD_SERVER_ROLE_ID_JOIN);
+
+      nextBot();
+
+      res.status(200).json(!!hasJoin);
+    } catch (err) {
+      console.log(err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  })
+
+  app.get('/checkAdminRole', authenticateApi, async (req, res) => {
 
     try {
-      const id = req.query.id;
+      const id = req.query.id?.toString();
+
+      if (!validateDiscordId(id)) {
+        return res.status(400).json({ error: 'Invalid Discord ID' });
+      }
 
       const guild = await bots[botIndex].guilds.fetch(DISCORD_SERVER_ID);
       const member = await guild.members.fetch(id);
 
       const hasAdmin = member.roles.cache.has(DISCORD_SERVER_ROLE_ID_ADMIN);
 
-      let auth = false;
-
-      if (!(!hasAdmin)) {
-        auth = true;
-      }
-
       nextBot();
 
-      res.status(200).json(auth);
+      res.status(200).json(!!hasAdmin);
     } catch (err) {
       console.log(err);
-      res.status(500);
+      res.status(500).json({ error: 'Internal server error' });
     }
   })
 
-  app.get('/setPhoneRole', async (req, res) => {
+  app.get('/setPhoneRole', authenticateApi, async (req, res) => {
     try {
-      const id = req.query.id;
+      const id = req.query.id?.toString();
+
+      if (!validateDiscordId(id)) {
+        return res.status(400).json({ error: 'Invalid Discord ID' });
+      }
 
       const guild = await bots[botIndex].guilds.fetch(DISCORD_SERVER_ID);
       const member = await guild.members.fetch(id);
@@ -274,32 +325,36 @@ async function startDiscordServer() {
 
       nextBot();
 
-      res.status(200);
+      res.status(200).json({ success: true });
     } catch (err) {
       console.error(err);
-      res.status(500);
+      res.status(500).json({ error: 'Internal server error' });
     }
   })
 
-  app.get('/removePhoneRole', async (req, res) => {
+  app.get('/removePhoneRole', authenticateApi, async (req, res) => {
     try {
-      const id = req.query.id;
+      const id = req.query.id?.toString();
+
+      if (!validateDiscordId(id)) {
+        return res.status(400).json({ error: 'Invalid Discord ID' });
+      }
 
       const guild = await bots[botIndex].guilds.fetch(DISCORD_SERVER_ID);
       const member = await guild.members.fetch(id);
 
       const hasPhone = member.roles.cache.has(DISCORD_SERVER_ROLE_ID_PHONE);
 
-      if (!(!hasPhone)) {
+      if (hasPhone) {
         await member.roles.remove(DISCORD_SERVER_ROLE_ID_PHONE);
       }
 
       nextBot();
 
-      res.status(200);
+      res.status(200).json({ success: true });
     } catch (err) {
       console.error(err);
-      res.status(500);
+      res.status(500).json({ error: 'Internal server error' });
     }
   })
 

@@ -34,9 +34,10 @@ export async function useConnectSkyway(gamerTag: string) {
       adminSpeaker
     } = useComponents();
 
-    const config = useRuntimeConfig();
-    const appId = config.public.skywayAppId as string;
-    const secretKey = config.public.skywaySecretKey as string;
+    // サーバーサイドから安全にSkyWay認証情報を取得
+    const skywayConfig = await $fetch('/api/getSkywayToken');
+    const appId = skywayConfig.appId as string;
+    const secretKey = skywayConfig.secretKey as string;
 
 
     const token = new SkyWayAuthToken({
@@ -205,24 +206,21 @@ export async function useConnectSkyway(gamerTag: string) {
       const gainNode = audioContext.value!.createGain();
       const destination = audioContext.value!.createMediaStreamDestination();
       const analyser = audioContext.value!.createAnalyser();
-      let animationFrameId: number;
       analyser.fftSize = 256;
 
       const isVoiceDetected = ref<boolean>(false);
+      let audioLevelActive = true;
 
       const checkAudioLevel = async () => {
-        if (analyser) {
+        while (audioLevelActive) {
           const bufferLength = analyser.fftSize;
           const dataArray = new Uint8Array(bufferLength);
           analyser.getByteTimeDomainData(dataArray);
 
-          // 振幅が変化しているかをチェック
-          const isDetected = dataArray.some(value => Math.abs(value - 128) > 1); // 128は無音状態
+          const isDetected = dataArray.some(value => Math.abs(value - 128) > 1);
           isVoiceDetected.value = isDetected;
 
           await new Promise((resolve) => setTimeout(resolve, 200));
-
-          checkAudioLevel();
         }
       }
 
@@ -250,7 +248,8 @@ export async function useConnectSkyway(gamerTag: string) {
         gainNode,
         destination,
         analyser,
-        audio: newAudio
+        audio: newAudio,
+        stopAudioLevel: () => { audioLevelActive = false; }
       })
       nearbyUserList.value.push(userInfo);
 
@@ -293,9 +292,9 @@ export async function useConnectSkyway(gamerTag: string) {
         // スマホ所持確認
         if (hasPhone != selfData.hasTelephone) {
           if (hasPhone == 0) {
-            $fetch(`${config.public.server.api.sslurl}/setPhoneRole?id=${discordId}`)
+            $fetch(`/api/setPhoneRole?id=${discordId}`)
           } else {
-            $fetch(`${config.public.server.api.sslurl}/removePhoneRole?id=${discordId}`)
+            $fetch(`/api/removePhoneRole?id=${discordId}`)
           }
         }
         hasPhone = selfData.hasTelephone;
@@ -374,16 +373,24 @@ export async function useConnectSkyway(gamerTag: string) {
 
     const leftMemberDettach = (name: string) => {
       const pubName = name.replace(/....__..__._../g, ' ');
-      const index = userList.value.findIndex(user => user.gamerTag === name);
-      userList.value.splice(index, 1);
+      const index = userList.value.findIndex(user => user.gamerTag === pubName);
+      if (index > -1) {
+        userList.value.splice(index, 1);
+      }
 
       unsubscribeCleanup(pubName);
+      subscribeMap.delete(pubName);
     }
 
     const unsubscribeCleanup = (name: string) => {
       const index = nearbyUserList.value.findIndex(user => user.gamerTag === name);
       if (index > -1) {
         const userInfo = nearbyUserList.value[index];
+
+        // 音声レベルチェックのループを停止
+        if (userInfo.stopAudioLevel) {
+          userInfo.stopAudioLevel();
+        }
 
         // Audioオブジェクトの再生停止とリソース解放
         userInfo.audio.pause();
@@ -395,7 +402,10 @@ export async function useConnectSkyway(gamerTag: string) {
         userInfo.analyser.disconnect();
         userInfo.destination.stream.getTracks().forEach(track => track.stop());
 
-        subscribeMap.get(name)!.sub = null;
+        const subEntry = subscribeMap.get(name);
+        if (subEntry) {
+          subEntry.sub = null;
+        }
         nearbyUserList.value.splice(index, 1);
       }
     }
@@ -408,8 +418,8 @@ export async function useConnectSkyway(gamerTag: string) {
   const getSelfData = (selfName: string) => {
     const { playerData } = useComponents();
 
-    const self = playerData.value.find(player => player.name == selfName)!;
-    return self;
+    if (!playerData.value || !Array.isArray(playerData.value)) return undefined;
+    return playerData.value.find(player => player.name == selfName);
   }
 
   const getDistance = (selfData: playerData) => {

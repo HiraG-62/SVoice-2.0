@@ -46,16 +46,19 @@ async function startSocket() {
     });
 
     socket.on('join', (data) => {
+      if (typeof data !== 'string' || data.length === 0 || data.length > 100) return;
       userMap.set(socket.id, {
         gamerTag: data
       })
       socket.emit('joined', Array.from(adminSpeaker));
     });
 
-    setInterval(() => {
+    const intervalId = setInterval(() => {
       if (userMap.get(socket.id) != null) {
         const data = getData();
-        socket.emit('playerData', data);
+        if (data != null) {
+          socket.emit('playerData', data);
+        }
       }
     }, 100)
 
@@ -77,21 +80,25 @@ async function startSocket() {
 
     socket.on('exit', () => {
       const user = userMap.get(socket.id);
-      if (adminSpeaker.has(user.gamerTag)) {
+      if (user && adminSpeaker.has(user.gamerTag)) {
         adminSpeaker.delete(user.gamerTag);
         io.emit('setAdminSpeaker', Array.from(adminSpeaker));
       }
     })
 
     socket.on('kick', (data) => {
+      if (typeof data !== 'string' || data.length === 0) return;
       const id = Array.from(userMap).find(([k, v]) => v.gamerTag == data)?.[0] || null;
-
-      io.to(id).emit('kicked');
+      if (id) {
+        io.to(id).emit('kicked');
+      }
     })
 
     socket.on('disconnect', () => {
+      clearInterval(intervalId);
+
       const user = userMap.get(socket.id);
-      if (adminSpeaker.has(user.gamerTag)) {
+      if (user && adminSpeaker.has(user.gamerTag)) {
         adminSpeaker.delete(user.gamerTag);
         io.emit('setAdminSpeaker', Array.from(adminSpeaker));
       }
