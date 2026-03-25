@@ -1,6 +1,5 @@
 import type { LocalAudioStream, LocalSFURoomMember, RoomPublication } from '@skyway-sdk/room';
 import { useCusEvent } from './useCusEvent';
-import type { WatchHandle } from 'vue';
 import type { Socket } from 'socket.io-client';
 
 export async function useConnectSkyway(gamerTag: string) {
@@ -109,9 +108,15 @@ export async function useConnectSkyway(gamerTag: string) {
       });
     }
 
-    const subscribeMap = new Map<string, { pub: RoomPublication, sub: string | null, subscribing: boolean }>();
-    const gainMap = new Map<string, Ref<number>>();
-    const watchMap = new Map<string, WatchHandle>();
+    // ユーザーごとのハンドラ（クロージャで状態を閉じ込める）
+    interface MemberHandler {
+      publication: RoomPublication;
+      handleCycle: (shouldSubscribe: boolean) => Promise<void>;
+      cleanup: () => void;
+      remove: () => void;
+    }
+
+    const memberHandlers = new Map<string, MemberHandler>();
     let playerVolume = new Map<string, number>();
     let hasPhone = 0;
     let isMute = 0;
@@ -133,13 +138,7 @@ export async function useConnectSkyway(gamerTag: string) {
           gain: user.gain,
           voice: user.voice,
         })),
-        subscribeMap: Array.from(subscribeMap.entries()).map(([key, val]) => ({
-          key,
-          pub: val.pub ? {
-            publisherId: val.pub.id,
-          } : null,
-          sub: val.sub ?? null,
-        })),
+        memberHandlers: Array.from(memberHandlers.keys()),
         playerVolume: Array.from(playerVolume.entries()),
       }
 
@@ -147,150 +146,185 @@ export async function useConnectSkyway(gamerTag: string) {
       socket.emit('debug', debugData);
     })
 
-    const addJoinMember = async (publication: RoomPublication) => {
+    const addJoinMember = (publication: RoomPublication) => {
       const publisher = publication.publisher;
       const pubName = publisher.name!.replace(/....__..__._../g, ' ');
 
       if (publisher.id === me.id) return;
 
-      subscribeMap.set(pubName, { pub: publication, sub: '', subscribing: false });
-
-      const gain = Number(localStorage.getItem(pubName) || 1);
-
-      const userInfo = reactive({
-        gamerTag: pubName,
-        gain: ref(gain)
-      })
-
-      userList.value.push(userInfo);
-
-      watch(userInfo, (newInfo) => {
-        const isNearby = nearbyUserList.value.find(user => user.gamerTag == pubName);
-        if(isNearby) {
-          isNearby.gain = Number(userInfo.gain);
-        }
-        localStorage.setItem(pubName, userInfo.gain.toString());
-      })
-    }
-
-    const subscribeAttach = async (publication: RoomPublication) => {
-
-      const publisher = publication.publisher;
-      const pubName = publisher.name!.replace(/....__..__._../g, ' ');
-
-      if (publisher.id === me.id) return;
-
-      // 二重subscribe防止
-      const entry = subscribeMap.get(pubName);
-      if (entry?.subscribing) return;
-      if (entry) entry.subscribing = true;
-
-      // AudioContextがsuspendedの場合はresumeする
-      if (audioContext.value?.state === 'suspended') {
-        await audioContext.value.resume();
-      }
-
-      let audioStream;
-      let roomSubscription;
-      try {
-        const { stream, subscription } = await me.subscribe(publication.id);
-        audioStream = stream;
-        roomSubscription = subscription;
-      } catch (err) {
-        if (entry) entry.subscribing = false;
-        return;
-      }
-
-      const mapEntry = subscribeMap.get(pubName);
-      if (mapEntry) {
-        mapEntry.pub = publication;
-        mapEntry.sub = roomSubscription.id;
-        mapEntry.subscribing = false;
-      }
-
-      if (!(audioStream instanceof RemoteAudioStream)) return;
-
-      const newStream = new MediaStream([audioStream.track]);
-
-      const tempAudio = new Audio();
-      tempAudio.controls = true;
-      tempAudio.autoplay = true;
-      tempAudio.muted = true;
-      tempAudio.srcObject = newStream;
-
-      const source = audioContext.value!.createMediaStreamSource(newStream);
-      const gainNode = audioContext.value!.createGain();
-      const destination = audioContext.value!.createMediaStreamDestination();
-      const analyser = audioContext.value!.createAnalyser();
-      analyser.fftSize = 256;
-
-      const isVoiceDetected = ref<boolean>(false);
-      let audioLevelActive = true;
-
-      const checkAudioLevel = async () => {
-        while (audioLevelActive) {
-          const bufferLength = analyser.fftSize;
-          const dataArray = new Uint8Array(bufferLength);
-          analyser.getByteTimeDomainData(dataArray);
-
-          const isDetected = dataArray.some(value => Math.abs(value - 128) > 1);
-          isVoiceDetected.value = isDetected;
-
-          await new Promise((resolve) => setTimeout(resolve, 200));
-        }
-      }
-
-      source.connect(gainNode);
-      gainNode.connect(destination);
-      gainNode.connect(analyser);
-
-      checkAudioLevel();
-
-      const newAudio = new Audio();
-      newAudio.controls = true;
-      newAudio.autoplay = true;
-      newAudio.muted = false;
-      newAudio.srcObject = destination.stream;
+      // --- ユーザーごとのクロージャ状態 ---
+      let isNearby = false;
+      let subscribing = false;
+      let sub: string | null = null;
 
       const gain = ref(Number(localStorage.getItem(pubName) || 1));
 
-      gainMap.set(pubName, gain);
-
-      const userInfo = reactive({
+      // 全ユーザーリスト（UI表示用）に追加
+      const joinUserInfo = reactive({
         gamerTag: pubName,
-        gain: gain,
-        voice: isVoiceDetected,
-        source,
-        gainNode,
-        destination,
-        analyser,
-        audio: newAudio,
-        stopAudioLevel: () => { audioLevelActive = false; }
+        gain: gain
       })
-      nearbyUserList.value.push(userInfo);
+      userList.value.push(joinUserInfo);
 
-      // gainMapの変更をuserListに同期するwatcherをセット
-      const w = watch(gain, (newGain) => {
-        const u = userList.value.find(user => user.gamerTag == pubName);
-        if (u) u.gain = gain.value;
-        localStorage.setItem(pubName, gain.value.toString());
-      });
-      watchMap.set(pubName, w);
-
-      const changeGain = computed(() => {
-        let volume = 0;
-        if (playerVolume.get(pubName) != undefined) volume = playerVolume.get(pubName)!;
-        if (adminSpeaker.value.has(pubName)) volume = 1;
-
-        return 2 * userInfo.gain * volume * (phoneLevel.value / 100);
+      // userListのgain変更を nearbyUserList に同期
+      watch(joinUserInfo, () => {
+        const nearby = nearbyUserList.value.find(u => u.gamerTag === pubName);
+        if (nearby) {
+          nearby.gain = Number(joinUserInfo.gain);
+        }
+        localStorage.setItem(pubName, joinUserInfo.gain.toString());
       })
 
-      gainNode.gain.value = changeGain.value
+      const doSubscribe = async () => {
+        if (subscribing || isNearby) return;
+        subscribing = true;
 
-      watch(changeGain, (newInfo) => {
+        // AudioContextがsuspendedの場合はresumeする
+        if (audioContext.value?.state === 'suspended') {
+          await audioContext.value.resume();
+        }
+
+        let audioStream;
+        let roomSubscription;
+        try {
+          const { stream, subscription } = await me.subscribe(publication.id);
+          audioStream = stream;
+          roomSubscription = subscription;
+        } catch (err) {
+          subscribing = false;
+          return;
+        }
+
+        sub = roomSubscription.id;
+        subscribing = false;
+
+        if (!(audioStream instanceof RemoteAudioStream)) return;
+
+        const newStream = new MediaStream([audioStream.track]);
+
+        const tempAudio = new Audio();
+        tempAudio.autoplay = true;
+        tempAudio.muted = true;
+        tempAudio.srcObject = newStream;
+
+        const source = audioContext.value!.createMediaStreamSource(newStream);
+        const gainNode = audioContext.value!.createGain();
+        const destination = audioContext.value!.createMediaStreamDestination();
+        const analyser = audioContext.value!.createAnalyser();
+        analyser.fftSize = 256;
+
+        const isVoiceDetected = ref<boolean>(false);
+        let audioLevelActive = true;
+
+        const checkAudioLevel = async () => {
+          while (audioLevelActive) {
+            const dataArray = new Uint8Array(analyser.fftSize);
+            analyser.getByteTimeDomainData(dataArray);
+            isVoiceDetected.value = dataArray.some(v => Math.abs(v - 128) > 1);
+            await new Promise(r => setTimeout(r, 200));
+          }
+        }
+
+        source.connect(gainNode);
+        gainNode.connect(destination);
+        gainNode.connect(analyser);
+        checkAudioLevel();
+
+        const newAudio = new Audio();
+        newAudio.autoplay = true;
+        newAudio.muted = false;
+        newAudio.srcObject = destination.stream;
+
+        const nearbyUserInfo = reactive({
+          gamerTag: pubName,
+          gain: gain,
+          voice: isVoiceDetected,
+          source,
+          gainNode,
+          destination,
+          analyser,
+          audio: newAudio,
+          stopAudioLevel: () => { audioLevelActive = false; }
+        })
+        nearbyUserList.value.push(nearbyUserInfo);
+        isNearby = true;
+
+        // nearbyUserListのgain変更をuserListに同期
+        watch(() => nearbyUserInfo.gain, (newGain) => {
+          const u = userList.value.find(u => u.gamerTag === pubName);
+          if (u) u.gain = Number(newGain);
+          localStorage.setItem(pubName, newGain.toString());
+        })
+
+        // 距離ベースのgain計算
+        const changeGain = computed(() => {
+          let vol = 0;
+          if (playerVolume.get(pubName) != undefined) vol = playerVolume.get(pubName)!;
+          if (adminSpeaker.value.has(pubName)) vol = 1;
+          return 2 * nearbyUserInfo.gain * vol * (phoneLevel.value / 100);
+        })
+
         gainNode.gain.value = changeGain.value;
-        localStorage.setItem(pubName, gain.value.toString());
-      })
+        watch(changeGain, () => {
+          gainNode.gain.value = changeGain.value;
+        })
+      }
+
+      const doUnsubscribe = async () => {
+        if (!isNearby || !sub) return;
+
+        try {
+          await me.unsubscribe(sub);
+        } catch (err) {
+          console.log("unsubscribe error", err);
+        }
+
+        doCleanup();
+      }
+
+      const doCleanup = () => {
+        const index = nearbyUserList.value.findIndex(u => u.gamerTag === pubName);
+        if (index > -1) {
+          const info = nearbyUserList.value[index];
+          info.stopAudioLevel();
+          info.audio.pause();
+          info.audio.srcObject = null;
+          info.source.disconnect();
+          info.gainNode.disconnect();
+          info.analyser.disconnect();
+          info.destination.stream.getTracks().forEach(t => t.stop());
+          nearbyUserList.value.splice(index, 1);
+        }
+        sub = null;
+        isNearby = false;
+      }
+
+      const handleCycle = async (shouldSubscribe: boolean) => {
+        if (shouldSubscribe) {
+          if (!isNearby && !subscribing) {
+            await doSubscribe();
+          }
+        } else {
+          if (isNearby) {
+            await doUnsubscribe();
+          }
+        }
+      }
+
+      const remove = () => {
+        doCleanup();
+        const index = userList.value.findIndex(u => u.gamerTag === pubName);
+        if (index > -1) {
+          userList.value.splice(index, 1);
+        }
+      }
+
+      memberHandlers.set(pubName, {
+        publication,
+        handleCycle,
+        cleanup: doCleanup,
+        remove,
+      });
     }
 
     on('dataCycle', async () => {
@@ -299,107 +333,56 @@ export async function useConnectSkyway(gamerTag: string) {
       isProcessingDataCycle = true;
 
       try {
-      const selfData = getSelfData(gamerTag);
+        const selfData = getSelfData(gamerTag);
 
-      if (selfData) {
-        isJoiningIngame.value = true;
+        if (selfData) {
+          isJoiningIngame.value = true;
 
-        // スマホ所持確認
-        if (hasPhone != selfData.hasTelephone) {
-          if (hasPhone == 0) {
-            $fetch(`${config.public.server.api.sslurl}/setPhoneRole?id=${discordId}`)
-          } else {
-            $fetch(`${config.public.server.api.sslurl}/removePhoneRole?id=${discordId}`)
+          // スマホ所持確認
+          if (hasPhone != selfData.hasTelephone) {
+            if (hasPhone == 0) {
+              $fetch(`${config.public.server.api.sslurl}/setPhoneRole?id=${discordId}`)
+            } else {
+              $fetch(`${config.public.server.api.sslurl}/removePhoneRole?id=${discordId}`)
+            }
           }
+          hasPhone = selfData.hasTelephone;
+
+          // ミュート確認
+          if (selfData.mute != 0 && selfData.mute != isMute) {
+            emit('mute', selfData.mute);
+          }
+          isMute = selfData.mute;
+
+          // 距離による音量計算
+          const distanceData = getDistance(selfData);
+          playerVolume = calcPlayerVolume(selfData, distanceData);
+
+          const promises: Promise<void>[] = [];
+          memberHandlers.forEach((handler, name) => {
+            const shouldSubscribe =
+              adminSpeaker.value.has(name) || (playerVolume.get(name) ?? 0) > 0;
+            promises.push(handler.handleCycle(shouldSubscribe));
+          })
+          await Promise.all(promises);
+        } else {
+          isJoiningIngame.value = false;
+
+          const promises: Promise<void>[] = [];
+          memberHandlers.forEach((handler, name) => {
+            const shouldSubscribe = adminSpeaker.value.has(name);
+            promises.push(handler.handleCycle(shouldSubscribe));
+          })
+          await Promise.all(promises);
         }
-        hasPhone = selfData.hasTelephone;
-
-        // ミュート確認
-        if(selfData.mute != 0 && selfData.mute != isMute) {
-          emit('mute', selfData.mute);
-        }
-        isMute = selfData.mute;
-
-        // 距離による音量計算
-        const distanceData = getDistance(selfData);
-        playerVolume = calcPlayerVolume(selfData, distanceData);
-
-        const promises: Promise<void>[] = [];
-        subscribeMap.forEach((member, name) => {
-          const task = (async () => {
-            try {
-              // 管理者か音量が0以上の場合は接続
-              const shouldSubscribe =
-                adminSpeaker.value.has(name) || (playerVolume.get(name) ?? 0) > 0;
-
-              // 接続
-              if (shouldSubscribe) {
-                if (!member.subscribing &&
-                  !me.subscriptions.some(sub => sub.id === member.sub!) &&
-                  room.publications.includes(member.pub!)) {
-                  await subscribeAttach(member.pub!).catch((err) => {
-                    console.log("subscribeAttach error", err);
-                  });
-                }
-              } else if (me.subscriptions.some(sub => sub.id === member.sub!) && playerVolume.get(name)! == 0) {
-                await me.unsubscribe(member.sub!).catch((err) => {
-                  console.log("unsubscribe error", err);
-                });
-                // watcherを停止してからクリーンアップ
-                const watcher = watchMap.get(name);
-                if (watcher) {
-                  watcher();
-                  watchMap.delete(name);
-                }
-                unsubscribeCleanup(name);
-              }
-            } catch (err) {
-
-            }
-          })();
-          promises.push(task);
-        })
-        await Promise.all(promises);
-      } else {
-        isJoiningIngame.value = false;
-
-        const promises: Promise<void>[] = [];
-        subscribeMap.forEach((member, name) => {
-          const task = (async () => {
-            try {
-              if (adminSpeaker.value.has(name)) {
-                if (!member.subscribing &&
-                  !me.subscriptions.find(sub => sub.id == member.sub!) &&
-                  room.publications.find(pub => pub == member.pub!)) {
-                  await subscribeAttach(member.pub!).catch((err) => {});
-                }
-              } else {
-                if (me.subscriptions.find(sub => sub.id == member.sub!)) {
-                  await me.unsubscribe(member.sub!).catch((err) => {});
-                  const watcher = watchMap.get(name);
-                  if (watcher) {
-                    watcher();
-                    watchMap.delete(name);
-                  }
-                  unsubscribeCleanup(name);
-                }
-              }
-            } catch (err) {
-              console.log(err);
-            }
-          })();
-          promises.push(task);
-        })
-        await Promise.all(promises);
-      }
       } finally {
         isProcessingDataCycle = false;
       }
     })
 
     on('exit', async () => {
-      subscribeMap.forEach((e, key) => unsubscribeCleanup(key));
-      subscribeMap.clear();
+      memberHandlers.forEach(handler => handler.cleanup());
+      memberHandlers.clear();
       userList.value.splice(0);
       nearbyUserList.value.splice(0);
 
@@ -414,46 +397,10 @@ export async function useConnectSkyway(gamerTag: string) {
 
     const leftMemberDettach = (name: string) => {
       const pubName = name.replace(/....__..__._../g, ' ');
-      const index = userList.value.findIndex(user => user.gamerTag === pubName);
-      if (index > -1) {
-        userList.value.splice(index, 1);
-      }
-
-      // watcherも停止
-      const watcher = watchMap.get(pubName);
-      if (watcher) {
-        watcher();
-        watchMap.delete(pubName);
-      }
-
-      unsubscribeCleanup(pubName);
-      subscribeMap.delete(pubName);
-    }
-
-    const unsubscribeCleanup = (name: string) => {
-      const index = nearbyUserList.value.findIndex(user => user.gamerTag === name);
-      if (index > -1) {
-        const userInfo = nearbyUserList.value[index];
-
-        // 音声レベルチェックのループを停止
-        userInfo.stopAudioLevel();
-
-        // Audioオブジェクトの再生停止とリソース解放
-        userInfo.audio.pause();
-        userInfo.audio.srcObject = null;
-
-        // オーディオ関連オブジェクトの接続解除とリソース解放
-        userInfo.source.disconnect();
-        userInfo.gainNode.disconnect();
-        userInfo.analyser.disconnect();
-        userInfo.destination.stream.getTracks().forEach(track => track.stop());
-
-        const entry = subscribeMap.get(name);
-        if (entry) {
-          entry.sub = null;
-          entry.subscribing = false;
-        }
-        nearbyUserList.value.splice(index, 1);
+      const handler = memberHandlers.get(pubName);
+      if (handler) {
+        handler.remove();
+        memberHandlers.delete(pubName);
       }
     }
 
