@@ -109,8 +109,8 @@ Socket.IO 側に認証はない。管理者専用の操作は UI で隠してい
 
 ## 環境変数・秘密ファイル（すべて git 管理外）
 
-backend（`backend/.env`、`backend/env/tokens.json`、`backend/key/{privkey,fullchain}.pem`）:
-`NODE_ENV`(dev|prod), `SERVER_URL`(CORS 許可元), `DISCORD_SERVER_ID`, `DISCORD_SERVER_ROOM_ID`, `DISCORD_SERVER_ROLE_ID_ADMIN`, `DISCORD_SERVER_ROLE_ID_PHONE`, `DISCORD_SERVER_ROLE_ID_JOIN`, `JOIN_PASSWORD`（必須）, `API_SECRET`（必須）, `GAME_API_SECRET`（任意）
+backend（`backend/.env`、`backend/env/tokens.json`、`backend/key/{privkey,fullchain}.pem`。すべて `backend/` 基準。キーの一覧と説明は `backend/.env.example`）:
+`NODE_ENV`(development|production。スクリプトが設定), `SERVER_URL`(CORS 許可元), `DISCORD_SERVER_ID`, `DISCORD_SERVER_ROOM_ID`, `DISCORD_SERVER_ROLE_ID_ADMIN`, `DISCORD_SERVER_ROLE_ID_PHONE`, `DISCORD_SERVER_ROLE_ID_JOIN`, `JOIN_PASSWORD`（必須）, `API_SECRET`（必須）, `GAME_API_SECRET`（任意）, ポート（`GAME_RECEIVER_PORT` / `SOCKET_PORT` / `DISCORD_HTTP_PORT` / `DISCORD_TLS_PORT`。既定は本番の値、開発は +100）, パス（`TLS_KEY_PATH` / `TLS_CERT_PATH` / `DISCORD_TOKENS_PATH` / `DATA_DIR`）, `DISCORD_ENABLED`（false で Bot・ロール操作を止め、内部 API は固定の応答を返す）, `DISCORD_MEMBER_COUNT_ENABLED`（false で人数表示だけ止める）。`ENV_FILE` で `.env` の場所を差し替えられる
 
 frontend（`frontend/.env`）:
 `NUXT_APP_SECRET`（セッション暗号化。**nuxt-auth-utils 0.6 から必須**。旧 `NUXT_SESSION_PASSWORD` は使われない）, `NUXT_SKYWAY_APP_ID`, `NUXT_SKYWAY_SECRET_KEY`, `NUXT_API_SECRET`（backend の `API_SECRET` と同じ値）, `NUXT_PUBLIC_SERVER_SOCKET_URL`, `NUXT_PUBLIC_SERVER_API_URL`, `NUXT_PUBLIC_SERVER_API_SSLURL`（未使用）, `NUXT_OAUTH_DISCORD_CLIENT_ID`, `NUXT_OAUTH_DISCORD_CLIENT_SECRET`, `NUXT_OAUTH_DISCORD_REDIRECT_URL`

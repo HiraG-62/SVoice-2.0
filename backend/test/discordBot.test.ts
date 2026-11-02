@@ -5,7 +5,7 @@ import { config } from './fixtures';
 
 const id = '123456789012345678';
 const endpoints = ['getUserName', 'getJoinRole', 'setJoinRole', 'checkAdminRole', 'setPhoneRole', 'removePhoneRole'];
-function setup(nickname: string | null = '[Player1]', roleIds: string[] = []) {
+function setup(nickname: string | null = '[Player1]', roleIds: string[] = [], discordEnabled = true) {
   const roles = new Set(roleIds);
   const member: DiscordMember = {
     nickname,
@@ -17,11 +17,42 @@ function setup(nickname: string | null = '[Player1]', roleIds: string[] = []) {
   };
   const fetchGuild = vi.fn(async () => ({ members: { fetch: vi.fn(async () => member) } }));
   const nextBot = vi.fn();
-  const app = createDiscordApp({ config, fetchGuild, nextBot, logger: { log: vi.fn(), error: vi.fn() } });
+  const app = createDiscordApp({ config: { ...config, DISCORD_ENABLED: discordEnabled }, fetchGuild, nextBot, logger: { log: vi.fn(), error: vi.fn() } });
   return { app, member, fetchGuild, nextBot };
 }
 
 describe('Discord 内部 API', () => {
+  it.each([
+    ['getJoinRole', true], ['checkAdminRole', false],
+    ['setJoinRole', { success: true }], ['setPhoneRole', { success: true }], ['removePhoneRole', { success: true }],
+    ['getUserName', { error: 'Discord name inconsistency error' }],
+  ] as const)('Discord 無効時の %s は Discord に問い合わせない', async (endpoint, expected) => {
+    const { app, fetchGuild, nextBot } = setup(null, [], false);
+    await request(app).get(`/${endpoint}?id=${id}`).set('x-api-secret', config.API_SECRET)
+      .expect(endpoint === 'getUserName' ? 500 : 200, JSON.stringify(expected));
+    expect(fetchGuild).not.toHaveBeenCalled();
+    expect(nextBot).not.toHaveBeenCalled();
+  });
+
+  it.each(endpoints)('Discord 無効時も %s の認証・ID を検証する', async (endpoint) => {
+    const { app, fetchGuild } = setup(null, [], false);
+    await request(app).get(`/${endpoint}?id=${id}`).expect(401);
+    await request(app).get(`/${endpoint}?id=${id}`).set('x-api-secret', 'wrong').expect(401);
+    await request(app).get(`/${endpoint}?id=invalid`).set('x-api-secret', config.API_SECRET).expect(400);
+    await request(app).get(`/${endpoint}`).set('x-api-secret', config.API_SECRET).expect(400);
+    expect(fetchGuild).not.toHaveBeenCalled();
+  });
+
+  it('Discord 無効時も参加パスワードを照合する', async () => {
+    const { app } = setup(null, [], false);
+    await request(app).post('/checkJoinPass').send({ pass: config.JOIN_PASSWORD }).expect(401);
+    for (const pass of [config.JOIN_PASSWORD, 'wrong']) {
+      await request(app).post('/checkJoinPass').set('x-api-secret', config.API_SECRET).send({ pass })
+        .expect(200, String(pass === config.JOIN_PASSWORD));
+    }
+    await request(app).post('/checkJoinPass').set('x-api-secret', config.API_SECRET).send({ pass: 123 }).expect(400);
+  });
+
   it.each([null, undefined, 12345678901234567])('文字列以外の ID を拒否する: %s', (invalid) => {
     expect(validateDiscordId(invalid)).toBe(false);
   });

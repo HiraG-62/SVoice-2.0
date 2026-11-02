@@ -3,7 +3,6 @@ import http from 'node:http';
 import https from 'node:https';
 import cors from 'cors';
 import fs from 'node:fs';
-import path from 'node:path';
 import { Client, GatewayIntentBits } from 'discord.js';
 import { joinVoiceChannel, type VoiceConnection } from '@discordjs/voice';
 import type { PlayerData } from '@svoice/shared';
@@ -63,6 +62,10 @@ export function createDiscordApp({ config, fetchGuild, nextBot, logger = console
         res.status(400).json({ error: 'Invalid Discord ID' });
         return;
       }
+      if (!config.DISCORD_ENABLED) {
+        res.status(500).json({ error: 'Discord name inconsistency error' });
+        return;
+      }
       const guild = await fetchGuild();
       const member = await guild.members.fetch(id);
       const discordName = member.nickname;
@@ -91,11 +94,15 @@ export function createDiscordApp({ config, fetchGuild, nextBot, logger = console
     }
   });
 
-  const roleHandler = (roleId: string, operation: 'check' | 'add' | 'remove'): RequestHandler => async (req, res) => {
+  const roleHandler = (roleId: string, operation: 'check' | 'add' | 'remove', disabledResult = false): RequestHandler => async (req, res) => {
     try {
       const id = req.query.id?.toString();
       if (!validateDiscordId(id)) {
         res.status(400).json({ error: 'Invalid Discord ID' });
+        return;
+      }
+      if (!config.DISCORD_ENABLED) {
+        res.status(200).json(operation === 'check' ? disabledResult : { success: true });
         return;
       }
       const guild = await fetchGuild();
@@ -113,7 +120,7 @@ export function createDiscordApp({ config, fetchGuild, nextBot, logger = console
   };
 
   app.get('/setJoinRole', authenticateApi, roleHandler(config.DISCORD_SERVER_ROLE_ID_JOIN, 'add'));
-  app.get('/getJoinRole', authenticateApi, roleHandler(config.DISCORD_SERVER_ROLE_ID_JOIN, 'check'));
+  app.get('/getJoinRole', authenticateApi, roleHandler(config.DISCORD_SERVER_ROLE_ID_JOIN, 'check', true));
   app.get('/checkAdminRole', authenticateApi, roleHandler(config.DISCORD_SERVER_ROLE_ID_ADMIN, 'check'));
   app.get('/setPhoneRole', authenticateApi, roleHandler(config.DISCORD_SERVER_ROLE_ID_PHONE, 'add'));
   app.get('/removePhoneRole', authenticateApi, roleHandler(config.DISCORD_SERVER_ROLE_ID_PHONE, 'remove'));
@@ -122,18 +129,18 @@ export function createDiscordApp({ config, fetchGuild, nextBot, logger = console
 
 export function createDiscordServers(app: ReturnType<typeof createDiscordApp>, config: BackendConfig) {
   const server = config.isDevelopment ? http.createServer(app) : https.createServer({
-    key: fs.readFileSync('./key/privkey.pem'),
-    cert: fs.readFileSync('./key/fullchain.pem'),
+    key: fs.readFileSync(config.TLS_KEY_PATH),
+    cert: fs.readFileSync(config.TLS_CERT_PATH),
   }, app);
   return { httpServer: http.createServer(app), server };
 }
 
-export function listenDiscordServers(servers: ReturnType<typeof createDiscordServers>) {
-  servers.httpServer.listen(DISCORD_HTTP_PORT, () => {
-    console.log('Discord server running on port 5000');
+export function listenDiscordServers(servers: ReturnType<typeof createDiscordServers>, config: BackendConfig) {
+  servers.httpServer.listen(config.DISCORD_HTTP_PORT, () => {
+    console.log(`Discord server running on port ${config.DISCORD_HTTP_PORT}`);
   });
-  servers.server.listen(DISCORD_TLS_PORT, () => {
-    console.log('Discord server running on port 1234');
+  servers.server.listen(config.DISCORD_TLS_PORT, () => {
+    console.log(`Discord server running on port ${config.DISCORD_TLS_PORT}`);
   });
 }
 
@@ -167,7 +174,14 @@ export async function loginWithRetry(
 }
 
 export async function startDiscordServer(config: BackendConfig, getData: () => PlayerData[] | null | undefined) {
-  const tokens: { tokens: string[] } = JSON.parse(fs.readFileSync(path.join('./env', 'tokens.json'), 'utf8'));
+  if (!config.DISCORD_ENABLED) {
+    console.log('Discord 機能は無効');
+    const app = createDiscordApp({ config, fetchGuild: async () => { throw new Error('Discord 機能は無効'); }, nextBot: () => {} });
+    const servers = createDiscordServers(app, config);
+    listenDiscordServers(servers, config);
+    return servers;
+  }
+  const tokens: { tokens: string[] } = JSON.parse(fs.readFileSync(config.DISCORD_TOKENS_PATH, 'utf8'));
   const bots: Client[] = [];
   for (let i = 0; i < tokens.tokens.length; i++) {
     const bot = new Client({ intents: [
@@ -216,7 +230,7 @@ export async function startDiscordServer(config: BackendConfig, getData: () => P
     }
   };
 
-  bots[bots.length - 1].once('ready', async () => {
+  if (config.DISCORD_MEMBER_COUNT_ENABLED && bots.length > 0) bots[bots.length - 1].once('ready', async () => {
     await new Promise((resolve) => setTimeout(resolve, INITIAL_VOICE_DELAY_MS));
     connection = await connectVoice(0);
     displayJoinMember();
@@ -224,6 +238,6 @@ export async function startDiscordServer(config: BackendConfig, getData: () => P
 
   const app = createDiscordApp({ config, fetchGuild: () => bots[botIndex].guilds.fetch(config.DISCORD_SERVER_ID), nextBot });
   const servers = createDiscordServers(app, config);
-  listenDiscordServers(servers);
+  listenDiscordServers(servers, config);
   return servers;
 }

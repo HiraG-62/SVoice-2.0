@@ -31,7 +31,7 @@ async function connect(name: string): Promise<ClientSocket> {
 beforeEach(async () => {
   logsDirectory = mkdtempSync(path.join(tmpdir(), 'svoice-socket-test-'));
   getData = vi.fn(() => [player]);
-  server = createSocketServer({ config, getData, logsDirectory, now: () => new Date(2026, 10, 3, 12), logger: { log: vi.fn() } });
+  server = createSocketServer({ config: { ...config, DATA_DIR: logsDirectory }, getData, now: () => new Date(2026, 10, 3, 12), logger: { log: vi.fn() } });
   await startSocket(server, 0);
   const address = server.server.address();
   if (!address || typeof address === 'string') throw new Error('ポート取得失敗');
@@ -41,8 +41,9 @@ beforeEach(async () => {
 afterEach(async () => {
   clients.splice(0).forEach((client) => client.disconnect());
   await new Promise<void>((resolve) => server.io.close(() => resolve()));
-  const logFile = path.join(logsDirectory, '2026-11-03.jsonl');
+  const logFile = path.join(logsDirectory, 'logs', '2026-11-03.jsonl');
   if (existsSync(logFile)) unlinkSync(logFile);
+  if (existsSync(path.join(logsDirectory, 'logs'))) rmdirSync(path.join(logsDirectory, 'logs'));
   rmdirSync(logsDirectory);
 });
 
@@ -144,6 +145,6 @@ describe('socketServer', () => {
       socket.emit('join', 'Player');
       await barrier;
     }
-    expect(readFileSync(path.join(logsDirectory, '2026-11-03.jsonl'), 'utf8')).toBe('{"message":"first"}\n{"message":"second"}\n');
+    expect(readFileSync(path.join(logsDirectory, 'logs', '2026-11-03.jsonl'), 'utf8')).toBe('{"message":"first"}\n{"message":"second"}\n');
   });
 });

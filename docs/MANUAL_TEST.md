@@ -5,7 +5,7 @@ backend・frontend・偽ゲームサーバーを手元で動かし、ログイ�
 ## 事前に知っておくこと
 
 - **SkyWay のルーム名が `test` に固定されている。** 本番と同じ SkyWay アプリ ID を使うと、テスト参加者が本番のルームに入り、本番の参加者の「全てのプレイヤー」一覧に表示される。開発用の SkyWay アプリを使うか、本番を使っていない時間に確認する。
-- **Discord への操作は本物になる。** 参加ロールとスマホロールが実際に付与・解除される。Bot は実際のボイスチャンネルに出入りする。本番の backend が同じ Bot トークンで動いていると、人数表示の Bot の出入りが競合する。
+- **`DISCORD_ENABLED=true` のとき、Discord への操作は本物になる。** 参加ロールとスマホロールが実際に付与・解除される。`DISCORD_MEMBER_COUNT_ENABLED=false` で人数表示だけを止められる。
 - 「インゲーム」設定の「変更確定」を押すと、`frontend/settings/setting.json`（git 管理下）が書き換わる。確認後に元へ戻す。
 - 通話の確認には、**Discord アカウントが 2 つ**必要になる（2 人で行うか、1 台の PC で 2 つのブラウザを使う）。どちらのアカウントも、サーバーのニックネームに `[ゲーマータグ]` を含めておく。1 台で行うときはハウリングを防ぐためにヘッドホンを使う。
 - 管理者機能（全体発言・キック・インゲーム設定）を確認するには、片方のアカウントに ADMIN ロールが必要。
@@ -26,7 +26,15 @@ backend・frontend・偽ゲームサーバーを手元で動かし、ログイ�
 | `JOIN_PASSWORD` | 参加パスワード（必須） |
 | `API_SECRET` | 任意の長い文字列（必須）。frontend の `NUXT_API_SECRET` と同じ値 |
 | `GAME_API_SECRET` | 任意。設定すると偽ゲームサーバーも自動で同じ値を送る |
-- `backend/env/tokens.json` を作る: `{ "tokens": ["Botトークン1", "Botトークン2", ...] }`
+| `GAME_RECEIVER_PORT` / `SOCKET_PORT` | 同じ機械で本番も動く場合は `30100` / `3101` |
+| `DISCORD_HTTP_PORT` / `DISCORD_TLS_PORT` | 同じ機械で本番も動く場合は `5100` / `1334` |
+| `DATA_DIR` | 開発は `data/dev`。debug ログは `backend/data/dev/logs/` |
+| `DISCORD_ENABLED` | 開発は `false`。Bot トークン不要。Discord OAuth には別途開発用ログインが必要 |
+| `DISCORD_MEMBER_COUNT_ENABLED` | Bot のロール操作だけ確認するときは `false` |
+
+- `.env` と相対パスは `backend/` 基準。既存の本番用 `.env` と分ける場合は、`backend/.env.example` を開発用ファイルにコピーし、起動前に `$env:ENV_FILE = 'E:\dev\SyakasabaVC\backend\.env.development'` を設定する。偽ゲームサーバーの PowerShell にも同じ `ENV_FILE` を設定する。
+- `TLS_KEY_PATH` / `TLS_CERT_PATH` / `DISCORD_TOKENS_PATH` でファイルの場所を指定できる。`pnpm dev` では証明書を読まない。
+- Discord の動作を確認する場合だけ `DISCORD_ENABLED=true` にし、`backend/env/tokens.json` を作る: `{ "tokens": ["Botトークン1", "Botトークン2", ...] }`
   - 人数表示では、参加人数と同じ番号の Bot がボイスチャンネルに入る（上限 20）。2 人で確認するなら 3 個以上あると表示を確認できる。最低 1 個は必要。
 
 ### frontend
@@ -53,7 +61,7 @@ backend・frontend・偽ゲームサーバーを手元で動かし、ログイ�
 cd E:\dev\SyakasabaVC\backend
 pnpm dev
 ```
-`Express server running on port 30000`、`WebSocket server running on port 3001`、`Bot #0 logged in`、`Discord server running on port 5000` が出れば OK。
+主要パスと設定したポートがログに出れば OK。開発の推奨値では `Express server running on port 30100`、`WebSocket server running on port 3101`、`Discord 機能は無効`、`Discord server running on port 5100` が出る。frontend の接続先も同じポートに合わせる。
 
 ```powershell
 # 2: frontend
@@ -65,9 +73,20 @@ http://localhost:3000 を開く。
 ```powershell
 # 3: 偽ゲームサーバー（引数はゲーマータグ。#0 = 自分、#1 以降 = 相手）
 cd E:\dev\SyakasabaVC\backend
-node scripts/fake-game-server.js "自分のタグ" "相手のタグ"
+pnpm fake-game "自分のタグ" "相手のタグ"
 ```
 コマンドは `help` で表示される（`d <距離>`、`sweep`、`set <番号|all> <項目> <値>`、`stop`／`start`、`show`）。
+
+対話なしのシナリオと記録の再生:
+
+```powershell
+pnpm fake-game --scenario static "自分のタグ" "相手のタグ"
+pnpm fake-game --scenario sweep "自分のタグ" "相手のタグ"
+pnpm fake-game --scenario walk --seed 42 "自分のタグ" "相手のタグ"
+pnpm fake-game --replay "E:\captures\capture.jsonl" --rename "記録のタグ1=自分のタグ" --rename "記録のタグ2=相手のタグ"
+```
+
+`static` は同じ地点、`sweep` は距離 0〜40 の往復、`walk` は seed で再現できるランダム移動。`--replay` は `tools/capture-player-data.mjs` の `.jsonl` を受信時刻の間隔で繰り返す。`--scenario` / `--replay` は標準入力を読まない。移動なしで送信だけ行う場合は `--no-interactive` を付ける。送信先は `GAME_RECEIVER_PORT`、個別に変える場合は `FAKE_GAME_ENDPOINT` を設定する。
 
 ## 3. 確認項目
 

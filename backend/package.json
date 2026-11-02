@@ -7,6 +7,7 @@
   "scripts": {
     "start": "cross-env NODE_ENV=production node dist/index.cjs",
     "dev": "cross-env NODE_ENV=development tsx watch src/index.ts",
+    "fake-game": "tsx scripts/fake-game-server.ts",
     "build": "tsup",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

@@ -18,10 +18,10 @@ interface SocketServerDependencies {
   logger?: Pick<Console, 'log'>;
 }
 
-export function createSocketServer({ config, getData, logsDirectory = './logs', now = () => new Date(), logger = console }: SocketServerDependencies) {
+export function createSocketServer({ config, getData, logsDirectory = path.join(config.DATA_DIR, 'logs'), now = () => new Date(), logger = console }: SocketServerDependencies) {
   const server = config.isDevelopment ? http.createServer() : https.createServer({
-    key: fs.readFileSync('./key/privkey.pem'),
-    cert: fs.readFileSync('./key/fullchain.pem'),
+    key: fs.readFileSync(config.TLS_KEY_PATH),
+    cert: fs.readFileSync(config.TLS_CERT_PATH),
   });
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
     cors: { origin: config.SERVER_URL, methods: ['GET', 'POST'] },
