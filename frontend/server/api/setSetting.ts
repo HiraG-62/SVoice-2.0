@@ -1,5 +1,6 @@
 import { defineEventHandler, readBody } from 'h3'
 import fs from 'fs';
+import type { IngameSettings } from '@svoice/shared';
 
 export default defineEventHandler(async (event) => {
   const session = await getUserSession(event);
@@ -7,12 +8,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: 'Unauthorized' });
   }
 
-  const user = session.user as { discordId: string; discordAuth: boolean; gamerTag: string };
+  const user = session.user;
   if (!user.discordAuth) {
     throw createError({ statusCode: 403, message: 'Admin permission required' });
   }
 
-  const body: ingameSettings = await readBody(event);
+  const body: IngameSettings = await readBody(event);
 
   fs.writeFileSync('settings/setting.json', JSON.stringify(body));
 })

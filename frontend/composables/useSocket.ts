@@ -1,11 +1,12 @@
-import { Socket } from 'socket.io-client'
+import type { Socket } from 'socket.io-client'
+import type { ClientToServerEvents, ServerToClientEvents } from '@svoice/shared';
 import { useCusEvent } from './useCusEvent';
 
-let socket: Socket;
+let socket: Socket<ServerToClientEvents, ClientToServerEvents>;
 
 export async function useConnectSocket() {
   const { $socket } = useNuxtApp();
-  socket = $socket as Socket;
+  socket = $socket;
 
   const { emit } = useCusEvent();
 
@@ -20,7 +21,7 @@ export async function useConnectSocket() {
   socket.emit('join', gamerTag.value);
 
   await new Promise<void>((resolve) => {
-    socket.on('joined', (data: Array<string>) => {
+    socket.on('joined', (data) => {
       adminSpeaker.value = new Set(data);
       resolve();
     })
@@ -35,7 +36,7 @@ export async function useConnectSocket() {
     getIngameSettings();
   })
 
-  socket.on('setAdminSpeaker', (data: Array<string>) => {
+  socket.on('setAdminSpeaker', (data) => {
     adminSpeaker.value = new Set(data);
   })
 
@@ -59,7 +60,7 @@ export function useDisconnectSocket() {
 export function useSetSettingSocket() {
   if (!socket) {
     const { $socket } = useNuxtApp();
-    socket = $socket as Socket;
+    socket = $socket;
   }
   socket.emit('changeSetting', 'change');
 }

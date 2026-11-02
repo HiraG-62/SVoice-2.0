@@ -59,7 +59,7 @@ export interface ServerToClientEvents {
 
 export interface ClientToServerEvents {
   join: (gamerTag: string) => void;
-  changeSetting: () => void;
+  changeSetting: (data?: string) => void;
   onSpeaker: () => void;
   offSpeaker: () => void;
   exit: () => void;

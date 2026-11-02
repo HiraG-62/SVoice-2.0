@@ -1,3 +1,5 @@
+import type { IngameSettings, PlayerData } from '@svoice/shared';
+
 export function useComponents() {
   const themeColor = useState<string>('themeColor', () => 'teal');
   const themeColorLight = (num: number) => useState<string>('themeColorLight', () => `${themeColor.value}-lighten-${num}`);
@@ -43,10 +45,10 @@ export function useComponents() {
   const userList = useState<JoinUserInfo[]>('userList', () => reactive([]));
   const nearbyUserList = useState<UserInfo[]>('nearbyUserList', () => reactive([]));
 
-  const ingameSettings = useState<ingameSettings | null>('ingameSettings', () => null);
-  const playerData = useState<playerData[]>('playerData', () => []);
+  const ingameSettings = useState<IngameSettings | null | undefined>('ingameSettings', () => null);
+  const playerData = useState<PlayerData[]>('playerData', () => []);
   const isSpeaking = useState<boolean>('isSpeaking', () => false);
-  const adminSpeaker = useState<Set<string>>('adminSpeaker', () => new Set());
+  const adminSpeaker = useState<Set<string | null>>('adminSpeaker', () => new Set());
 
   function sliderLevel(value: number, max: number) {
     if (value == 0) return 'grey'

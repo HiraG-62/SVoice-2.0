@@ -7,7 +7,7 @@ const loading = ref<boolean>(false);
 const joinLoad = ref<boolean>(false);
 const joinAuth = ref<boolean>(false);
 const password = ref<string>();
-let discordId: any;
+let discordId: string | null | undefined;
 
 const {
   gamerTag,
@@ -16,9 +16,9 @@ const {
   micLevel
 } = useComponents();
 
-if (session.value.user) {
-  gamerTag.value = (session.value?.user as { discordId: string; discordAuth: boolean; gamerTag: string }).gamerTag
-  discordId = (session.value?.user as { discordId: string; discordAuth: boolean; gamerTag: string }).discordId || null;
+if (session.value?.user) {
+  gamerTag.value = session.value.user.gamerTag
+  discordId = session.value.user.discordId || null;
 }
 
 

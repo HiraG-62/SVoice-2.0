@@ -107,7 +107,7 @@
 |---|---|---|---|
 | O1 | **不具合調査の仕組み**: 「聞こえない」などの報告で送られたデバッグデータを見ても、原因が分からない | 対応 | 原因の切り分けに必要な情報（自分と相手の購読状態、SkyWay の接続状態、計算した音量と判定の理由、AudioContext の状態、直近のエラーなど）を集めて送る。運営が報告を探して読める形で保存する。ログの上限は S4 で設ける |
 
-### 3.5 型エラー（既存 21 件）
+### 3.5 型エラー（既存 21 件）— 解消済み（phase0-frontend）
 `useApi.ts`（2）、`useAudio.ts`（1）、`useSkyway.client.ts`（8）、`pages/index.vue`（1）、`server/routes/auth/discord.get.ts`（app・server で各 3）、`server/api/*Setting.ts`（3。server の tsconfig からグローバル型が見えない）。対応: 必須（フェーズ 0）。
 
 ---

@@ -1,3 +1,5 @@
+import { sendRedirect } from 'nuxt/server';
+
 export default defineOAuthDiscordEventHandler({
   config: {
     emailRequired: true, // ユーザーのメールアドレスを取得する
@@ -5,8 +7,8 @@ export default defineOAuthDiscordEventHandler({
   async onSuccess(event, { user, tokens }) {
     const config = useRuntimeConfig();
     const discordId = user.id;
-    let gamerTag: Response;
-    let discordAuth: Response;
+    let gamerTag: string;
+    let discordAuth: boolean;
 
     const apiHeaders = {
       'x-api-secret': config.apiSecret

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 const { session } = useUserSession();
 
-const discordAuth = (session.value?.user as { discordId: string; discordAuth: boolean; gamerTag: string }).discordAuth;
+const discordAuth = session.value?.user?.discordAuth;
 
 const { themeColor, userList, nearbyUserList } = useComponents();
 

@@ -122,15 +122,14 @@ frontend（`frontend/.env`）:
 | 対象 | コマンド | 2026-11-03 時点の結果 |
 |---|---|---|
 | テスト | ルートで `pnpm test` | backend 81 件・shared 4 件すべて成功（2026-11-03、フェーズ 0 の 1 本目の後） |
-| 型チェック | ルートで `pnpm typecheck` | backend・shared は成功。frontend は未追加 |
+| 型チェック | ルートで `pnpm typecheck` | frontend・backend・shared ともエラー 0 件（フェーズ 0 で既存の 21 件を解消） |
 | ビルド | ルートで `pnpm build` | 成功（frontend の警告はチャンクサイズのみ） |
-| frontend 型チェック | `cd frontend; npx -y -p typescript@5.9 -p vue-tsc@3 vue-tsc --noEmit -p .nuxt/tsconfig.app.json`（server 側は `tsconfig.server.json`） | **既存のエラー: app 15 件、server 6 件**。ビルドには影響しない |
 
 - pnpm workspace（Node 24）。backend のテストは実際のモジュールを読み込み、HTTP と Socket.IO を実際に通す（Discord はギルドとメンバーを偽物に差し替える）。
 - 起動スモーク（手動）: `express.js` と `socket.js` だけを起動し、POST → `join` → `playerData` / `setAdminSpeaker` / `changeSetting` / `kick` の受信、5 秒後のクリアを確認済み。Nuxt の `.output` をダミーの環境変数で起動し、未ログインの画面描画、API が 401 を返すこと、`/auth/discord` が Discord へリダイレクトすることも確認済み。
 - ログイン後のフロー（OAuth、Bot、SkyWay、ゲームサーバー）は本物の認証情報が必要なため、ローカルでは検証していない。
 
-既存の型エラーの内訳: `useApi.ts`（useFetch の戻り値が undefined を含む）、`useAudio.ts`（Uint8Array の型）、`useSkyway.client.ts`（track や info が undefined の可能性）、`index.vue`（session.value が null の可能性）、`discord.get.ts`（nuxt-auth-utils 0.6 の `RequestEvent` と h3 の `H3Event` の不一致）、`server/api/*Setting.ts`（server の tsconfig からグローバル型 `ingameSettings` が見えない）。
+（解消済み）旧来の型エラーの内訳: `useApi.ts`（useFetch の戻り値が undefined を含む）、`useAudio.ts`（Uint8Array の型）、`useSkyway.client.ts`（track や info が undefined の可能性）、`index.vue`（session.value が null の可能性）、`discord.get.ts`（nuxt-auth-utils 0.6 の `RequestEvent` と h3 の `H3Event` の不一致）、`server/api/*Setting.ts`（server の tsconfig からグローバル型 `ingameSettings` が見えない）。
 
 ## 版の履歴と旧リポジトリ
 

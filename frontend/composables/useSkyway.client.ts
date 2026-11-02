@@ -1,6 +1,6 @@
 import type { LocalAudioStream, LocalSFURoomMember, RoomPublication } from '@skyway-sdk/room';
 import { useCusEvent } from './useCusEvent';
-import type { Socket } from 'socket.io-client';
+import type { PlayerData } from '@svoice/shared';
 
 export async function useConnectSkyway(gamerTag: string) {
   if (typeof window !== 'undefined' && !import.meta.env.SSR) {
@@ -16,7 +16,7 @@ export async function useConnectSkyway(gamerTag: string) {
 
     const { session } = useUserSession();
 
-    const discordId = (session.value?.user as { discordId: string; discordAuth: boolean; gamerTag: string }).discordId;
+    const discordId = session.value?.user?.discordId;
 
     const { on, off, emit } = useCusEvent();
     const { $socket } = useNuxtApp();
@@ -102,7 +102,7 @@ export async function useConnectSkyway(gamerTag: string) {
 
     if (micDest.value) {
       const { stream } = micDest.value
-      const selfStream = new LocalAudioStream(stream.getTracks()[0]);
+      const selfStream = new LocalAudioStream(stream.getTracks()[0]!);
 
       await me.publish(selfStream, {
         maxSubscribers: 99
@@ -124,7 +124,7 @@ export async function useConnectSkyway(gamerTag: string) {
     let isProcessingDataCycle = false;
 
     on('debug', () => {
-      const socket = $socket as Socket;
+      const socket = $socket;
       const jpNowStr = new Intl.DateTimeFormat('ja-JP', {
         timeZone: 'Asia/Tokyo',
         year: 'numeric', month: '2-digit', day: '2-digit',
@@ -286,7 +286,7 @@ export async function useConnectSkyway(gamerTag: string) {
       const doCleanup = () => {
         const index = nearbyUserList.value.findIndex(u => u.gamerTag === pubName);
         if (index > -1) {
-          const info = nearbyUserList.value[index];
+          const info = nearbyUserList.value[index]!;
           info.stopAudioLevel();
           info.audio.pause();
           info.audio.srcObject = null;
@@ -417,7 +417,7 @@ export async function useConnectSkyway(gamerTag: string) {
     return playerData.value.find(player => player.name == selfName);
   }
 
-  const getDistance = (selfData: playerData) => {
+  const getDistance = (selfData: PlayerData) => {
     const { playerData } = useComponents();
     const distanceMap = new Map<string, number>();
 
@@ -431,7 +431,7 @@ export async function useConnectSkyway(gamerTag: string) {
     return distanceMap;
   }
 
-  const calcPlayerVolume = (selfData: playerData, distanceData: Map<string, number>) => {
+  const calcPlayerVolume = (selfData: PlayerData, distanceData: Map<string, number>) => {
 
     const {
       ingameSettings,

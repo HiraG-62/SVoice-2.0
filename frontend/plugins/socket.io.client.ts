@@ -1,12 +1,13 @@
 import { io, Socket } from 'socket.io-client'
+import type { ClientToServerEvents, ServerToClientEvents } from '@svoice/shared';
 import { defineNuxtPlugin } from '#app'
 
-export default defineNuxtPlugin((nuxtApp) => {
+export default defineNuxtPlugin(() => {
   const config = useRuntimeConfig()
-  const socket: Socket = io(config.public.server.socket.url, {
+  const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(config.public.server.socket.url, {
     secure: true,
     transports: ['websocket', 'polling']
   })
 
-  nuxtApp.provide('socket', socket)
+  return { provide: { socket } }
 })

@@ -108,7 +108,7 @@ export function useMicIndicator() {
   } = useComponents();
 
   let analyser: AnalyserNode | null = null;
-  let dataArray: Uint8Array | null = null;
+  let dataArray: Uint8Array<ArrayBuffer> | null = null;
   let animationFrameId: number | null = null;
 
   const startListening = async () => {
