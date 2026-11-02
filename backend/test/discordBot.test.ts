@@ -25,11 +25,11 @@ describe('Discord 内部 API', () => {
   it.each([
     ['getJoinRole', true], ['checkAdminRole', false],
     ['setJoinRole', { success: true }], ['setPhoneRole', { success: true }], ['removePhoneRole', { success: true }],
-    ['getUserName', { error: 'Discord name inconsistency error' }],
+    ['getUserName', { error: 'discord_unavailable' }],
   ] as const)('Discord 無効時の %s は Discord に問い合わせない', async (endpoint, expected) => {
     const { app, fetchGuild, nextBot } = setup(null, [], false);
     await request(app).get(`/${endpoint}?id=${id}`).set('x-api-secret', config.API_SECRET)
-      .expect(endpoint === 'getUserName' ? 500 : 200, JSON.stringify(expected));
+      .expect(endpoint === 'getUserName' ? 503 : 200, JSON.stringify(expected));
     expect(fetchGuild).not.toHaveBeenCalled();
     expect(nextBot).not.toHaveBeenCalled();
   });
@@ -81,9 +81,24 @@ describe('Discord 内部 API', () => {
     expect(nextBot).toHaveBeenCalledOnce();
   });
 
-  it.each(['名前だけ', null, '[]'])('ゲーマータグがなければ 500: %s', async (nickname) => {
+  it.each(['名前だけ', null, '[]'])('ゲーマータグがなければ 422: %s', async (nickname) => {
     const { app } = setup(nickname);
-    await request(app).get(`/getUserName?id=${id}`).set('x-api-secret', config.API_SECRET).expect(500, { error: 'Discord name inconsistency error' });
+    await request(app).get(`/getUserName?id=${id}`).set('x-api-secret', config.API_SECRET).expect(422, { error: 'nickname_missing' });
+  });
+
+  it.each([[10007, 404, 'member_not_found'], [50013, 500, 'internal_error']] as const)('メンバー取得失敗 %s を区別し、ID は末尾だけ記録する', async (code, status, error) => {
+    const log = vi.fn();
+    const app = createDiscordApp({ config, fetchGuild: async () => ({ members: { fetch: async () => { throw { code }; } } }), nextBot: vi.fn(), logger: { log, error: vi.fn() } });
+    await request(app).get(`/getUserName?id=${id}`).set('x-api-secret', config.API_SECRET).expect(status, { error });
+    expect(log).toHaveBeenCalledWith(expect.stringContaining(id.slice(-4)));
+    expect(log.mock.calls.flat().join()).not.toContain(id);
+  });
+
+  it('内部 API は許可外 IP を拒否し、CORS を公開しない', async () => {
+    const app = createDiscordApp({ config: { ...config, INTERNAL_API_ALLOWED_IPS: ['192.0.2.1'] }, fetchGuild: vi.fn(), nextBot: vi.fn() });
+    await request(app).get(`/getJoinRole?id=${id}`).set('x-api-secret', config.API_SECRET).set('X-Forwarded-For', '192.0.2.1').expect(403);
+    const response = await request(setup().app).get(`/getJoinRole?id=${id}`).set('x-api-secret', config.API_SECRET).set('Origin', config.SERVER_URL!);
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
   });
 
   it.each([{ pass: 'test-password', expected: true }, { pass: 'wrong', expected: false }])('参加パスワードを照合する: $expected', async ({ pass, expected }) => {

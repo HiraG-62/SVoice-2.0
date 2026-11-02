@@ -8,6 +8,13 @@ import { tmpdir } from 'node:os';
 const secrets = { JOIN_PASSWORD: 'password', API_SECRET: 'secret' };
 
 describe('config', () => {
+  it('IP 制限は既定で loopback のみ、カンマ区切りと * を受け付ける', () => {
+    const defaults = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+    expect(parseConfig(secrets)).toMatchObject({ GAME_ALLOWED_IPS: defaults, INTERNAL_API_ALLOWED_IPS: defaults });
+    expect(parseConfig({ ...secrets, GAME_ALLOWED_IPS: ' 192.0.2.1, ::1, ', INTERNAL_API_ALLOWED_IPS: '*' }))
+      .toMatchObject({ GAME_ALLOWED_IPS: ['192.0.2.1', '::1'], INTERNAL_API_ALLOWED_IPS: ['*'] });
+  });
+
   it('ENV_FILE で指定したファイルだけを読み、既存の環境変数を優先する', () => {
     const directory = mkdtempSync(path.join(tmpdir(), 'svoice-config-'));
     const envFile = path.join(directory, 'dummy.env');

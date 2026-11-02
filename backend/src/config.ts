@@ -1,19 +1,23 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
 import path from 'node:path';
+import { DEFAULT_ALLOWED_IPS } from './ipAccess';
 
 export const BACKEND_ROOT = path.resolve(__dirname, '..');
 const portSchema = z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().min(1).max(65535));
 const booleanSchema = z.enum(['true', 'false']).default('true').transform((value) => value === 'true');
+const allowedIpsSchema = z.string().default(DEFAULT_ALLOWED_IPS.join(',')).transform((value) => value.split(',').map((ip) => ip.trim()).filter(Boolean));
 const gameConfigSchema = z.object({
   GAME_RECEIVER_PORT: portSchema.default(30000),
   GAME_API_SECRET: z.string().optional(),
+  GAME_ALLOWED_IPS: allowedIpsSchema,
 });
 
 const configSchema = gameConfigSchema.extend({
   NODE_ENV: z.string().refine((value) => value !== 'dev', 'NODE_ENV must use development instead of dev').optional(),
   JOIN_PASSWORD: z.string().min(1),
   API_SECRET: z.string().min(1),
+  INTERNAL_API_ALLOWED_IPS: allowedIpsSchema,
   SERVER_URL: z.string().optional(),
   SOCKET_PORT: portSchema.default(3001),
   DISCORD_HTTP_PORT: portSchema.default(5000),
