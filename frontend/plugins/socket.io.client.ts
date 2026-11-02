@@ -2,9 +2,11 @@ import { io, Socket } from 'socket.io-client'
 import type { ClientToServerEvents, ServerToClientEvents } from '@svoice/shared';
 import { defineNuxtPlugin } from '#app'
 import { createSocketSession } from '../utils/socketSession';
-import { useCusEvent } from '../composables/useCusEvent';
+import { createVoiceSession } from '../composables/useVoice';
+import { useCallStore } from '../stores/call';
+import { useSettingsStore } from '../stores/settings';
 
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin({ name: 'voice', dependsOn: ['pinia'], setup(nuxtApp) {
   const config = useRuntimeConfig()
   const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(config.public.server.socket.url, {
     autoConnect: false,
@@ -20,24 +22,18 @@ export default defineNuxtPlugin(() => {
     transports: ['websocket', 'polling']
   })
 
-  const { emit } = useCusEvent();
-  const state = useComponents();
-  const connectionError = useState<string>('connectionError', () => '');
-  const exit = () => {
-    emit('exit', 'exit');
-    state.isSpeaking.value = false;
-    state.isJoining.value = false;
-    state.isJoiningIngame.value = false;
-    state.playerData.value = [];
-    state.adminSpeaker.value = new Set();
-  };
+  const call = useCallStore();
+  const settings = useSettingsStore();
   const voiceSocket = createSocketSession(socket, {
-    joined: data => { state.adminSpeaker.value = new Set(data); },
-    playerData: data => { state.playerData.value = data; emit('dataCycle', 'change'); },
-    changeSetting: () => { void getIngameSettings(); },
-    setAdminSpeaker: data => { state.adminSpeaker.value = new Set(data); emit('dataCycle', 'change'); },
-    kicked: exit,
-    failed: () => { exit(); connectionError.value = '接続できませんでした'; },
+    joined: data => call.setSpeakers(data),
+    playerData: data => call.setPlayers(data),
+    changeSetting: () => { void settings.load().catch(() => call.setError('距離設定の読み込み失敗')); },
+    setAdminSpeaker: data => call.setSpeakers(data),
+    kicked: () => { void voice.leave(); },
+    failed: reason => { void voice.leave(); call.setError(reason === 'timeout' ? 'Socket の接続タイムアウト' : 'Socket の接続失敗'); },
   });
-  return { provide: { voiceSocket } }
-})
+  const voice = createVoiceSession(voiceSocket);
+  nuxtApp.vueApp.onUnmount(() => { void voice.dispose(); });
+  if (import.meta.hot) import.meta.hot.dispose(() => { void voice.dispose(); });
+  return { provide: { voiceSocket, voice } }
+} })

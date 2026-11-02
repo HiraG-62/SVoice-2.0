@@ -1,82 +1,38 @@
 <script setup lang="ts">
-
-const {
-  themeColor,
-  themeColorLight,
-  themeColorDark,
-  micIndicator,
-  micIndicatorMax,
-  micIndicatorMin,
-  isMicTest,
-  isNoiseSuppression,
-  isExtendsMic,
-  isJoining,
-  phoneLevel,
-  phoneMax,
-  phoneMin,
-  micLevel,
-  micMax,
-  micMin,
-  micIndicatorColor,
-  audioInputs,
-  audioOutputs,
-  selectedInput,
-  selectedOutput,
-  media
-} = useComponents();
-
-const { startListening, stopListening } = useMicIndicator();
-
-const changePhoneVolume = () => {
-  if (phoneLevel.value > phoneMax.value) {
-    phoneLevel.value = phoneMax.value;
-  } else if (phoneLevel.value < phoneMin.value) {
-    phoneLevel.value = phoneMin.value;
-  }
-}
-const changeMicVolume = () => {
-  if (micLevel.value > micMax.value) {
-    micLevel.value = micMax.value;
-  } else if (micLevel.value < micMin.value) {
-    micLevel.value = micMin.value;
-  }
-
-}
-
-const clickExtendsMic = () => {
-  isExtendsMic.value = !isExtendsMic.value
-
-  if (isExtendsMic.value) {
-    micMax.value = 2000;
-  } else {
-    micMax.value = 200;
-    if (micLevel.value > 200) {
-      micLevel.value = 200;
-    }
-  }
-}
-
-const toggleMicTest = async () => {
-  isMicTest.value = !isMicTest.value;
-  if (isMicTest.value) {
-    await startListening();
-  } else {
-    stopListening();
-  }
-}
-
-const toggleNoiseSuppression = () => {
-  useNoiseSuppression();
-}
-
-watch(selectedInput, async () => {
-  await useChangeMicMedia(isMicTest.value);
-})
-
-watch(phoneLevel, async () => {
-  localStorage.setItem('phoneLevel', phoneLevel.value.toString());
-})
-
+import { storeToRefs } from 'pinia';
+import { useAudioStore } from '../stores/audio';
+import { useCallStore } from '../stores/call';
+import { DEFAULT_LEVEL, NORMAL_LEVEL_MAX, EXTENDED_LEVEL_MAX } from '../services/constants';
+import { sliderColor } from '../utils/sliderColor';
+const { themeColor, themeColorLight } = useThemeColor();
+const audio = useAudioStore(), call = useCallStore();
+const { inputs: audioInputs, outputs: audioOutputs } = storeToRefs(audio);
+const micLevel = computed({ get: () => audio.micLevel, set: v => audio.setMicLevel(v) });
+const phoneLevel = computed({ get: () => audio.phoneLevel, set: v => audio.setPhoneLevel(v) });
+const isNoiseSuppression = computed({ get: () => audio.noiseSuppression, set: v => audio.setNoiseSuppression(v) });
+const selectedInput = computed({ get: () => audio.selectedInput, set: v => audio.selectInput(v) });
+const selectedOutput = computed({ get: () => audio.selectedOutput, set: v => audio.selectOutput(v) });
+const isJoining = computed(() => call.status === 'joined');
+const isExtendsMic = ref(false), isMicTest = ref(false), micIndicator = ref(0);
+const dialogOpen = defineModel<boolean>();
+const micMax = computed(() => isExtendsMic.value ? EXTENDED_LEVEL_MAX : NORMAL_LEVEL_MAX);
+const phoneMax = NORMAL_LEVEL_MAX, micMin = 0, phoneMin = 0, micIndicatorMin = 0;
+const micIndicatorMax = DEFAULT_LEVEL / 2;
+const micIndicatorColor = computed(() => sliderColor(micIndicator.value, micIndicatorMax));
+const changePhoneVolume = () => audio.setPhoneLevel(Math.min(phoneLevel.value, phoneMax));
+const changeMicVolume = () => audio.setMicLevel(Math.min(micLevel.value, micMax.value));
+const clickExtendsMic = () => { isExtendsMic.value = !isExtendsMic.value; changeMicVolume(); };
+const toggleMicTest = () => {
+  if (isMicTest.value) { useVoice().mic.stopTest(); isMicTest.value = false; return; }
+  isMicTest.value = useVoice().mic.startTest(value => { micIndicator.value = value; });
+};
+watch(() => audio.ready, ready => { if (!ready) isMicTest.value = false; });
+watch(dialogOpen, open => {
+  if (open) return;
+  useVoice().mic.stopTest();
+  isMicTest.value = false;
+});
+onUnmounted(() => useVoice().mic.stopTest());
 </script>
 
 <template>
@@ -97,7 +53,7 @@ watch(phoneLevel, async () => {
               </v-icon>
             </span>
           </v-list-item-subtitle>
-          <v-slider v-model="micLevel" :color="themeColorLight(2).value" :min="micMin" :max="micMax" :step="0.1"
+          <v-slider v-model="micLevel" :color="themeColorLight(2)" :min="micMin" :max="micMax" :step="0.1"
             style="padding-left: 15px;">
             <template #append>
               <v-text-field @input="changeMicVolume" v-model="micLevel" density="compact" style="width: 100px"
@@ -113,7 +69,7 @@ watch(phoneLevel, async () => {
         </v-list-item>
         <v-list-item>
           <v-list-item-subtitle>出力音量</v-list-item-subtitle>
-          <v-slider v-model="phoneLevel" :color="themeColorLight(2).value" :min="phoneMin" :max="phoneMax" :step="0.1"
+          <v-slider v-model="phoneLevel" :color="themeColorLight(2)" :min="phoneMin" :max="phoneMax" :step="0.1"
             style="padding-left: 15px;">
             <template #append>
               <v-text-field @input="changePhoneVolume" v-model="phoneLevel" density="compact" style="width: 100px"
@@ -127,11 +83,11 @@ watch(phoneLevel, async () => {
       <v-col cols="12" sm="10" md="7" lg="5" xl="5">
         <v-list-item>
           <v-list-item-subtitle>マイクテスト</v-list-item-subtitle>
-          <v-switch @change="toggleNoiseSuppression" v-model="isNoiseSuppression" :color="themeColor" label="ノイズ抑制" inset class="ml-4"/>
+          <v-switch v-model="isNoiseSuppression" :color="themeColor" label="ノイズ抑制" inset class="ml-4"/>
           <v-slider v-model="micIndicator" :min="micIndicatorMin" :max="micIndicatorMax" :color="micIndicatorColor"
             thumb-size="none" readonly>
             <template #prepend>
-              <v-btn @click="toggleMicTest" :color="isMicTest ? themeColorLight(3).value : '#ddd'" width="100">
+              <v-btn @click="toggleMicTest" :color="isMicTest ? themeColorLight(3) : '#ddd'" width="100">
                 {{ isMicTest ? 'テスト中' : 'テスト' }}
                 <v-icon :color="isMicTest ? '' : 'red'">
                   {{ isMicTest ? 'mdi-microphone' : 'mdi-microphone-off' }}

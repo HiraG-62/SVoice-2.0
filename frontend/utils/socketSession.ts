@@ -3,7 +3,11 @@ import type { ClientToServerEvents, ServerToClientEvents } from '@svoice/shared'
 
 export const JOIN_TIMEOUT_MS = 10_000;
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
-type Callbacks = ServerToClientEvents & { failed: () => void };
+export type SocketFailure = 'connection' | 'timeout';
+export class SocketJoinError extends Error {
+  constructor(readonly reason: SocketFailure) { super('接続できませんでした'); }
+}
+type Callbacks = ServerToClientEvents & { failed: (reason?: SocketFailure) => void };
 
 export function createSocketSession(socket: AppSocket, callbacks: Callbacks) {
   let cleanup: (() => void) | undefined;
@@ -17,15 +21,18 @@ export function createSocketSession(socket: AppSocket, callbacks: Callbacks) {
     leave();
     return new Promise((resolve, reject) => {
       let pending = true;
+      let rejection: Error = new Error('接続できませんでした');
       let timeout: ReturnType<typeof setTimeout>;
-      const failed = () => {
+      const failed = (reason: SocketFailure) => {
         const wasPending = pending;
+        rejection = new SocketJoinError(reason);
         leave();
-        if (!wasPending) callbacks.failed();
+        if (!wasPending) callbacks.failed(reason);
       };
+      const connectionFailed = () => failed('connection');
       const armTimeout = () => {
         clearTimeout(timeout);
-        timeout = setTimeout(failed, JOIN_TIMEOUT_MS);
+        timeout = setTimeout(() => failed('timeout'), JOIN_TIMEOUT_MS);
       };
       const connected = () => { armTimeout(); socket.emit('join', gamerTag); };
       const joined: ServerToClientEvents['joined'] = data => {
@@ -36,7 +43,7 @@ export function createSocketSession(socket: AppSocket, callbacks: Callbacks) {
       };
       const kicked = () => { leave(); callbacks.kicked(); };
       socket.on('connect', connected);
-      socket.on('connect_error', failed);
+      socket.on('connect_error', connectionFailed);
       socket.on('joined', joined);
       socket.on('playerData', callbacks.playerData);
       socket.on('changeSetting', callbacks.changeSetting);
@@ -45,13 +52,13 @@ export function createSocketSession(socket: AppSocket, callbacks: Callbacks) {
       cleanup = () => {
         clearTimeout(timeout);
         socket.off('connect', connected);
-        socket.off('connect_error', failed);
+        socket.off('connect_error', connectionFailed);
         socket.off('joined', joined);
         socket.off('playerData', callbacks.playerData);
         socket.off('changeSetting', callbacks.changeSetting);
         socket.off('setAdminSpeaker', callbacks.setAdminSpeaker);
         socket.off('kicked', kicked);
-        if (pending) { pending = false; reject(new Error('接続できませんでした')); }
+        if (pending) { pending = false; reject(rejection); }
       };
       armTimeout();
       socket.connect();
@@ -59,6 +66,8 @@ export function createSocketSession(socket: AppSocket, callbacks: Callbacks) {
   }
   return {
     join, leave,
+    resources: () => ({ connected: socket.connected, listeners: (['connect', 'connect_error', 'joined', 'playerData', 'changeSetting', 'setAdminSpeaker', 'kicked'] as const)
+      .reduce((count, event) => count + socket.listeners(event).length, 0) }),
     changeSetting: () => socket.emit('changeSetting', 'change'),
     onSpeaker: () => socket.emit('onSpeaker'),
     offSpeaker: () => socket.emit('offSpeaker'),

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { useDisplay } from 'vuetify';
+import { useSettingsStore } from '../stores/settings';
 
 const { mdAndUp, smAndDown } = useDisplay();
 
-const {
-  themeColorLight,
-  ingameSettings
-} = useComponents();
+const { themeColorLight } = useThemeColor();
+const settings = useSettingsStore();
+const ingameSettings = ref(settings.value ? structuredClone(toRaw(settings.value)) : null);
+watch(() => settings.value, value => { ingameSettings.value = value ? structuredClone(toRaw(value)) : null; });
 
 const containerStyle = computed(() => {
   if (mdAndUp.value) {
@@ -19,12 +20,13 @@ const containerStyle = computed(() => {
 })
 
 const setSettings = async () => {
-  await setIngameSettings();
+  settings.replace(ingameSettings.value ? structuredClone(toRaw(ingameSettings.value)) : null);
+  await settings.save();
   useSetSettingSocket();
 }
 
 const getDefaultSettings = async () => {
-  await getIngameDefaultSettings();
+  await settings.defaults();
 }
 
 </script>
@@ -48,7 +50,7 @@ const getDefaultSettings = async () => {
           <v-list-item v-for="(setting, settingKey) in option.value" :key="settingKey">
             <v-list-item-subtitle>{{ setting.label }}</v-list-item-subtitle>
             <v-list-item-action>
-              <v-slider v-model="setting.value" :color="themeColorLight(2).value" :min="setting.min" :max="setting.max"
+              <v-slider v-model="setting.value" :color="themeColorLight(2)" :min="setting.min" :max="setting.max"
                 :step="setting.step" style="padding: 5px 15px" class="align-center" hide-details>
                 <template #prepend>
                   <span style="width: 50px">{{ setting.value }}</span>

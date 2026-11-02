@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useDisconnectSocket } from '~/composables/useSocket';
+import { storeToRefs } from 'pinia';
+import { useCallStore } from '../stores/call';
 import { joinAuthMessage, loginErrorMessage } from '~/utils/authMessages';
 
 const { session, loggedIn } = useUserSession();
@@ -10,11 +11,12 @@ const authPending = ref(false);
 const authLocked = ref(false);
 const authError = ref('');
 const password = ref('');
-const { gamerTag, isJoining } = useComponents();
-if (session.value?.user) gamerTag.value = session.value.user.gamerTag;
+const call = useCallStore();
+const { error: errorMessage } = storeToRefs(call);
+const isJoining = computed(() => call.status === 'joined');
+if (session.value?.user) call.identify(session.value.user.gamerTag);
 
-const errorMessage = useState<string>('connectionError', () => loginErrorMessage(useRoute().query.error));
-const { emit } = useCusEvent();
+call.setError(loginErrorMessage(useRoute().query.error));
 
 const loginClick = () => navigateTo('/auth/discord', { external: true });
 
@@ -35,30 +37,17 @@ const joinAuthClick = async () => {
 
 const joinClick = async () => {
   joinLoad.value = true;
-  errorMessage.value = '';
-  try {
-    await useConnectSkyway(gamerTag.value);
-    await useConnectSocket();
-    isJoining.value = true;
-  } catch {
-    emit('exit', 'exit');
-    useDisconnectSocket();
-    errorMessage.value = '接続できませんでした';
-    isJoining.value = false;
-  } finally {
-    joinLoad.value = false;
-  }
+  call.setError('');
+  try { await useVoice().join(); } finally { joinLoad.value = false; }
 };
 
 onMounted(async () => {
   if (!loggedIn.value) return;
   try {
     joinAuth.value = await $fetch('/api/getJoinRole');
-    await useAudio();
-    await useAudioDevice();
-    await getIngameSettings();
+    await useVoice().initialize();
   } catch {
-    errorMessage.value = '初期化失敗';
+    call.setError('マイク・距離設定の初期化失敗');
   } finally {
     loading.value = false;
   }

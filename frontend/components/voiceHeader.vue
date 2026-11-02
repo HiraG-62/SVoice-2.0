@@ -1,62 +1,19 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia';
+import { useAudioStore } from '../stores/audio';
+import { useCallStore } from '../stores/call';
 const { session } = useUserSession();
-
 const discordAuth = session.value?.user?.discordAuth;
-
-const { on, emit } = useCusEvent()
-
-const {
-  gamerTag,
-  isSelfMute,
-  isNoiseSuppression,
-  isJoining,
-  isJoiningIngame,
-  isSpeaking
-} = useComponents();
-
-const toggleNoiseSuppression = () => {
-  isNoiseSuppression.value = !isNoiseSuppression.value;
-  useNoiseSuppression();
-}
-
-const settingDialog = ref();
-
-const openSetting = () => {
-  if(settingDialog.value) {
-    settingDialog.value.open();
-  }
-}
-
-const adminSpeak = () => {
-  if(isSpeaking.value) {
-    useOffAdminSpeaker();
-    isSpeaking.value = false;
-  } else {
-    useOnAdminSpeaker();
-    isSpeaking.value = true;
-  }
-}
-
-const toggleMute = (status: number) => {
-  if ((status === 1 && !isSelfMute.value) || (status === 2 && !isSelfMute.value)) {
-    new Audio('/sounds/mute.mp3').play();
-    isSelfMute.value = true;
-  } else if ((status === 1 && isSelfMute.value) || (status === 3 && isSelfMute.value)) {
-    new Audio('/sounds/unmute.mp3').play();
-    isSelfMute.value = false;
-  }
-}
-
-const exit = () => {
-  emit('exit', 'exit');
-  useDisconnectSocket();
-
-  isSpeaking.value = false;
-  isJoining.value = false;
-}
-
-on('mute', (status: number) => toggleMute(status));
-
+const audio = useAudioStore(), call = useCallStore();
+const { muted: isSelfMute, noiseSuppression: isNoiseSuppression } = storeToRefs(audio);
+const { gamerTag, inGame: isJoiningIngame, speaking: isSpeaking } = storeToRefs(call);
+const isJoining = computed(() => call.status === 'joined');
+const toggleNoiseSuppression = () => audio.setNoiseSuppression(!audio.noiseSuppression);
+const settingDialog = ref<{ open(): void }>();
+const openSetting = () => settingDialog.value?.open();
+const adminSpeak = () => { if (call.speaking) useOffAdminSpeaker(); else useOnAdminSpeaker(); };
+const toggleMute = (status: number) => useVoice().mute(status);
+const exit = () => useVoice().leave();
 </script>
 
 <template>

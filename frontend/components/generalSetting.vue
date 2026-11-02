@@ -1,17 +1,7 @@
 <script setup lang="ts">
-const { loggedIn, clear } = useUserSession();
-const { emit } = useCusEvent()
-
-const logout = () => {
-  emit('exit', 'exit');
-  useDisconnectSocket();
-  useComponents().isJoining.value = false;
-  clear();
-}
-
-const sendDebug = () => {
-  emit('debug', 'debug');
-}
+const { clear } = useUserSession();
+const logout = async () => { await useVoice().leave(); await clear(); };
+const sendDebug = () => useVoice().sendDebug();
 </script>
 
 <template>

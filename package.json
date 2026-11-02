@@ -9,7 +9,10 @@
     "dev": "node frontend/scripts/dev.mjs",
     "build": "pnpm -r --if-present build",
     "test": "pnpm -r --if-present test",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "typecheck": "pnpm -r --if-present typecheck && pnpm typecheck:e2e",
+    "dev:e2e": "node frontend/scripts/dev.mjs --e2e",
+    "e2e": "playwright test --config e2e/playwright.config.ts",
+    "typecheck:e2e": "pnpm --filter @svoice/frontend exec vue-tsc --noEmit -p ../e2e/tsconfig.json"
   },
   "pnpm": {
     "overrides": {
@@ -18,6 +21,8 @@
     }
   },
   "devDependencies": {
-    "concurrently": "^10.0.6"
+    "@playwright/test": "1.63.0",
+    "concurrently": "^10.0.6",
+    "tsx": "^4.23.15"
   }
 }

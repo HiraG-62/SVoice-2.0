@@ -92,6 +92,37 @@ pnpm --filter @svoice/backend fake-game --replay 'E:\captures\capture.jsonl' --r
 
 同じ `pnpm dev` で起動し、通常の「ログイン」から Discord OAuth を通す。参加ロールがない場合は参加パスワードを入力する。証明書は development では不要。backend のパスは `E:\dev\SyakasabaVC\backend\` 基準、frontend の相対 `NUXT_DATA_DIR` は `E:\dev\SyakasabaVC\frontend\` 基準。
 
+## E2E
+
+開発用の設定を用意し、通常の `pnpm dev` を停止してから、偽ゲームサーバーを含まない開発サーバーを起動する。
+
+```powershell
+cd E:\dev\SyakasabaVC
+pnpm dev:e2e
+```
+
+別の PowerShell で実行する。
+
+```powershell
+cd E:\dev\SyakasabaVC
+pnpm e2e
+```
+
+`E:\dev\SyakasabaVC\e2e\voice.spec.ts` が、導入済み Chromium の疑似マイクと実際の開発用 SkyWay ルームを使う。疑似マイクには `E:\dev\SyakasabaVC\e2e\fixtures\microphone.wav` の合成音声を流す。ゲームデータはテスト自身が送信する。通常の偽ゲームサーバーを同時に動かさない。参加・音量・ミュート・設定権限・待機中の全体発言・キック・再参加の後始末・参加ロック・診断ログ保存・参加失敗の表示を確認する。変更した距離設定は終了時に元へ戻す。Discord OAuth と実際のロール変更は手動確認が必要。
+
+結果は `E:\dev\SyakasabaVC\e2e\.report.json`、失敗時の情報は `E:\dev\SyakasabaVC\e2e\.results\` に保存する。終了後は `pnpm dev:e2e` を Ctrl+C で停止する。
+
+## 診断ログの閲覧
+
+設定の「一般」→「デバッグ用 送信」で、音声の状態・相手ごとの購読と gain・直近の警告とエラーを backend の `DATA_DIR/logs/` に保存する。
+
+```powershell
+cd E:\dev\SyakasabaVC
+pnpm --filter @svoice/backend debug-log --tag Alice --date 2026-11-03
+```
+
+`--tag` と `--date` は省略可能。開発用ログを読む場合は、実行前に `$env:ENV_FILE = 'E:\dev\SyakasabaVC\backend\.env.development'` を指定する。
+
 ## 確認項目
 
 ### 接続
@@ -139,10 +170,11 @@ pnpm --filter @svoice/backend fake-game --replay 'E:\captures\capture.jsonl' --r
 
 - [ ] Discord モードで人数表示を有効にした場合、10 秒以内に人数に応じて Bot が入れ替わる
 
-### 既知の問題の再現
+### 音声・接続の回帰確認
 
-- [ ] V1: ミュート中に入力音量を動かすと、相手に声が聞こえてしまうか
-- [ ] C2: 退出 → 再参加を繰り返した後のキックで処理が重複するか（コンソール確認）
+- [ ] V1: ミュート中に入力音量を動かしても、相手に声が聞こえない
+- [ ] V2: 距離内で受信が切れた場合に再購読し、同じタグの再配信後も一覧が重複しない
+- [ ] C2: 退出 → 再参加を繰り返した後のキックで処理が重複しない
 - [ ] C7: 人数表示 Bot が一度もボイスチャンネルに入らないことがあるか
 
 ## 片付け

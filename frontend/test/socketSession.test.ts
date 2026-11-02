@@ -9,7 +9,7 @@ function setup() {
   const outgoing = vi.fn();
   const fake = {
     connected: false,
-    on: incoming.on.bind(incoming), off: incoming.off.bind(incoming), emit: outgoing,
+    on: incoming.on.bind(incoming), off: incoming.off.bind(incoming), listeners: incoming.listeners.bind(incoming), emit: outgoing,
     connect: vi.fn(() => { fake.connected = true; incoming.emit('connect'); }),
     disconnect: vi.fn(() => { fake.connected = false; }),
   };
@@ -29,9 +29,11 @@ describe('Socket の参加と後始末', () => {
       for (const name of ['joined', 'playerData', 'changeSetting', 'setAdminSpeaker', 'kicked']) expect(incoming.listenerCount(name)).toBe(1);
       incoming.emit('joined', ['Bob']);
       await joined;
+      expect(session.resources()).toEqual({ connected: true, listeners: 7 });
       incoming.emit('playerData', []);
       session.leave();
       expect(incoming.eventNames()).toEqual([]);
+      expect(session.resources()).toEqual({ connected: false, listeners: 0 });
     }
     expect(callbacks.playerData).toHaveBeenCalledTimes(3);
   });

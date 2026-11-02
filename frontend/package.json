@@ -16,13 +16,14 @@
     "@mdi/font": "^7.4.47",
     "@nuxt/image": "^2.2.1",
     "@nuxt/kit": "^4.6.3",
+    "@pinia/nuxt": "^1.0.3",
     "@skyway-sdk/room": "^2.5.1",
     "@skyway-sdk/token": "^2.1.5",
     "@svoice/shared": "workspace:*",
     "@timephy/rnnoise-wasm": "^1.0.0",
-    "mitt": "^3.0.1",
     "nuxt": "^4.6.3",
     "nuxt-auth-utils": "^0.6.0",
+    "pinia": "^4.1.0",
     "sass": "^1.107.1",
     "socket.io-client": "^4.8.4",
     "vue": "^3.5.44",
@@ -33,5 +34,6 @@
     "typescript": "~5.9.3",
     "vitest": "^5.1.0",
     "vue-tsc": "^3.0.0"
-  }
+  },
+  "version": "1.0.0"
 }

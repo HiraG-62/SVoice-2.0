@@ -1,35 +1,40 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia';
+import { useCallStore } from '../stores/call';
+import { MAX_PEER_GAIN } from '../services/constants';
 const { session } = useUserSession();
 
 const discordAuth = session.value?.user?.discordAuth;
 
-const { themeColor, userList, nearbyUserList } = useComponents();
+const { themeColor } = useThemeColor();
+const call = useCallStore();
+const { users: userList, nearby: nearbyUserList } = storeToRefs(call);
 
 const dialog = ref<boolean>(false);
 const selectedUser = ref<string | null>(null);
 const userListTabs = ref(0);
 
-const headers: any[] = [
+const headers = [
   {
     title: 'ゲーマータグ',
-    align: 'start',
+    align: 'start' as const,
     sortable: true,
     key: 'gamerTag',
     width: '30%'
   },
   {
     title: '音量',
-    align: 'center',
+    align: 'center' as const,
     sortable: false,
     key: 'volume',
     width: '40%'
   }
 ]
 
-const gamerTagHeaders: any[] = [
+const gamerTagHeaders = [
   {
     title: 'ゲーマータグ',
-    align: 'start',
+    align: 'start' as const,
     sortable: true,
     key: 'gamerTag',
     width: '100%'
@@ -45,9 +50,6 @@ const kick = (gamerTag: string) => {
   useKick(gamerTag);
   dialog.value = false;
 }
-
-onMounted(() => {
-})
 
 </script>
 
@@ -66,24 +68,13 @@ onMounted(() => {
             <div v-if="discordAuth">
               <span @click="openDialog(item.gamerTag)" class="cursor-pointer"><v-icon
                   :color="item.voice ? 'green' : 'black'">mdi-volume-high</v-icon> {{ item.gamerTag }}</span>
-              <v-dialog v-model="dialog" max-width="400">
-                <v-card>
-                  <v-card-title class="text-h5">キック確認</v-card-title>
-                  <v-card-text>{{ selectedUser }}をキックします。</v-card-text>
-                  <v-card-actions>
-                    <v-spacer></v-spacer>
-                    <v-btn @click="dialog = false" color="darkblue">キャンセル</v-btn>
-                    <v-btn @click="kick(selectedUser!)" color="red">確認</v-btn>
-                  </v-card-actions>
-                </v-card>
-              </v-dialog>
             </div>
             <div v-else>
               <span><v-icon :color="item.voice ? 'green' : 'black'">mdi-volume-high</v-icon> {{ item.gamerTag }}</span>
             </div>
           </template>
           <template v-slot:item.volume="{ item }">
-            <v-slider v-model="item.gain" :max="2" :min="0" :step="0.01"></v-slider>
+            <v-slider :model-value="item.gain" @update:model-value="call.setUserGain(item.gamerTag, $event)" :max="MAX_PEER_GAIN" :min="0" :step="0.01"></v-slider>
           </template>
         </v-data-table>
       </v-tabs-window-item>
@@ -93,27 +84,27 @@ onMounted(() => {
           <template v-slot:item.gamerTag="{ item }">
             <div v-if="discordAuth">
               <span @click="openDialog(item.gamerTag)" class="cursor-pointer"> {{ item.gamerTag }}</span>
-              <v-dialog v-model="dialog" max-width="400">
-                <v-card>
-                  <v-card-title class="text-h5">キック確認</v-card-title>
-                  <v-card-text>{{ selectedUser }}をキックします。</v-card-text>
-                  <v-card-actions>
-                    <v-spacer></v-spacer>
-                    <v-btn @click="dialog = false" color="darkblue">キャンセル</v-btn>
-                    <v-btn @click="kick(selectedUser!)" color="red">確認</v-btn>
-                  </v-card-actions>
-                </v-card>
-              </v-dialog>
             </div>
             <div v-else>
               <span> {{ item.gamerTag }}</span>
             </div>
           </template>
           <template v-slot:item.volume="{ item }">
-            <v-slider v-model="item.gain" :max="2" :min="0" :step="0.01"></v-slider>
+            <v-slider :model-value="item.gain" @update:model-value="call.setUserGain(item.gamerTag, $event)" :max="MAX_PEER_GAIN" :min="0" :step="0.01"></v-slider>
           </template>
         </v-data-table>
       </v-tabs-window-item>
     </v-tabs-window>
+    <v-dialog v-model="dialog" max-width="400">
+      <v-card>
+        <v-card-title class="text-h5">キック確認</v-card-title>
+        <v-card-text>{{ selectedUser }}をキックします。</v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn @click="dialog = false" color="darkblue">キャンセル</v-btn>
+          <v-btn @click="kick(selectedUser!)" color="red">確認</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>

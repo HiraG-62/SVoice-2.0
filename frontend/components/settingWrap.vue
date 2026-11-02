@@ -4,18 +4,13 @@ const { session } = useUserSession();
 const discordAuth = session.value?.user?.discordAuth;
 
 
-const {
-  themeColor,
-  themeColorDark
-} = useComponents();
-
-const { stopListening } = useMicIndicator();
+const { themeColor, themeColorDark } = useThemeColor();
 
 const setting = ref<boolean>(false);
 const settingTabs = ref(1);
 
 const closeSetting = () => {
-  stopListening();
+  useVoice().mic.stopTest();
   setting.value = false;
 }
 
@@ -38,7 +33,7 @@ defineExpose({
         </v-btn>
         <v-toolbar-title>設定</v-toolbar-title>
       </v-toolbar>
-      <v-tabs v-model="settingTabs" :color="themeColorDark(1).value" fixed-tabs>
+      <v-tabs v-model="settingTabs" :color="themeColorDark(1)" fixed-tabs>
         <v-tab value="general">一般</v-tab>
         <v-tab value="sound">サウンド</v-tab>
         <v-tab v-if="discordAuth" value="ingame">インゲーム</v-tab>

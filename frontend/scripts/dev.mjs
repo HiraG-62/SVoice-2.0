@@ -30,7 +30,7 @@ if (process.argv.includes('--fake-game')) {
   const { result } = concurrently([
     { name: 'backend', command: 'pnpm --filter @svoice/backend dev', env },
     { name: 'frontend', command: 'pnpm --filter @svoice/frontend dev', env },
-    { name: 'fake-game', command: 'node frontend/scripts/dev.mjs --fake-game', env },
+    ...(process.argv.includes('--e2e') ? [] : [{ name: 'fake-game', command: 'node frontend/scripts/dev.mjs --fake-game', env }]),
   ], { prefix: 'name', prefixColors: ['blue', 'green', 'magenta'], killOthersOn: [] });
   result.catch(() => { process.exitCode = 1; });
 }

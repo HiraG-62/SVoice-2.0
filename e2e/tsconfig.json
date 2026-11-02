@@ -1,0 +1,8 @@
+{
+  "extends": "../frontend/.nuxt/tsconfig.app.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "typeRoots": ["../frontend/node_modules/@types"]
+  },
+  "include": ["*.ts", "../frontend/.nuxt/nuxt.d.ts", "../frontend/shared/**/*.d.ts", "../frontend/types/**/*.d.ts"]
+}
