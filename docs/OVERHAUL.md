@@ -61,11 +61,11 @@
 |---|---|---|---|---|---|
 | S1 | SkyWay の `secretKey` をクライアントに返している。ログインした誰でも任意の権限のトークンを作れる | `frontend/server/api/getSkywayToken.ts`, `useSkyway.client.ts` | コード | 必須 | トークンはサーバー側で発行し、自分のゲーマータグでの参加に限定する |
 | S2 | ロール系の API が、セッションではなくクエリの `id` を使う。パスワードなしで参加ロールを取れるうえ、他人のロールも操作できる | `frontend/server/api/*Role*.ts` | コード | 必須 | セッションの `discordId` だけを使う。参加ロールの付与はパスワード照合と同じ処理の中で行う |
-| S3 | Socket.IO に認証がない。誰でも `kick` / `onSpeaker` / `changeSetting` を送れるし、`join` で他人を名乗れる。ブラウザ以外からも送れる | `backend/external/socket.js` | 実証 | 必須 | 接続時にセッションで認証し、ゲーマータグはサーバー側で決める。`kick` / `onSpeaker` / `changeSetting` は Admin だけが使える。`debug` は全員が使える（I6） |
+| S3 | Socket.IO に認証がない。誰でも `kick` / `onSpeaker` / `changeSetting` を送れるし、`join` で他人を名乗れる。ブラウザ以外からも送れる | `backend/src/socketServer.ts` | 実証 | 必須 | 接続時にセッションで認証し、ゲーマータグはサーバー側で決める。`kick` / `onSpeaker` / `changeSetting` は Admin だけが使える。`debug` は全員が使える（I6） |
 | S4 | `debug` イベントがサイズ・回数の制限なしでディスクに追記する | 同上 | コード | 対応 | 1 回あたりの大きさと回数を制限し、ログの合計サイズと保存期間に上限を設ける。認証（S3）によってブラウザ以外からの送信を防ぐ（O1 と合わせて行う） |
-| S5 | プレイヤーデータの受け口が、`GAME_API_SECRET` を設定しないと無認証になる。BE 側は秘密キーを送れない | `backend/external/express.js` | コード | 対応 | **受信の保護**（C8 と合わせて行う）: 受け付ける送信元 IP を設定で決める（既定は同じ機械のみ。緊急時は許可先を追加する）。型と範囲を厳しく検証し、大きさに上限を設ける。Windows ファイアウォールの設定を手順書に書く。契約は変えない（I3） |
+| S5 | プレイヤーデータの受け口が、`GAME_API_SECRET` を設定しないと無認証になる。BE 側は秘密キーを送れない | `backend/src/gameReceiver.ts` | コード | 対応 | **受信の保護**（C8 と合わせて行う）: 受け付ける送信元 IP を設定で決める（既定は同じ機械のみ。緊急時は許可先を追加する）。型と範囲を厳しく検証し、大きさに上限を設ける。Windows ファイアウォールの設定を手順書に書く。契約は変えない（I3） |
 | S6 | 参加パスワードの照合に回数制限がない（総当たりできる） | `checkJoinPass` | コード | 対応 | アカウントごとに試行回数の上限を設けてロックする。運営が Web の管理者画面から解除できるようにする |
-| S7 | 内部 API を 5000（http）と 1234 の 2 ポートで公開し、CORS も許可している。外部から直接到達できる可能性がある | `backend/external/discordBot.js` | コード | 対応 | 既定では同じ機械からの呼び出しだけを受け付け、設定で許可先を追加できるようにする（frontend が別の機械になる緊急時のため）。秘密キーの確認は続ける。ポートは変えない（I2） |
+| S7 | 内部 API を 5000（http）と 1234 の 2 ポートで公開し、CORS も許可している。外部から直接到達できる可能性がある | `backend/src/discordBot.ts` | コード | 対応 | 既定では同じ機械からの呼び出しだけを受け付け、設定で許可先を追加できるようにする（frontend が別の機械になる緊急時のため）。秘密キーの確認は続ける。ポートは変えない（I2） |
 | S8 | `setSetting` が受け取った内容を検証せずにファイルへ書き込む（管理者のみ） | `frontend/server/api/setSetting.ts` | コード | 対応 | スキーマで検証する |
 | S9 | 管理者かどうかをログイン時にセッションへ保存するだけなので、ロールを外しても再ログインまで権限が残る | `frontend/server/routes/auth/discord.get.ts` | コード | 対応 | 管理者操作のたびに確認するか、短い間隔で確認し直す |
 | S10 | OAuth で不要な `email` スコープを要求している | 同上 | コード | 対応 | スコープを `identify` だけにする |
@@ -92,12 +92,12 @@
 |---|---|---|---|---|---|
 | C1 | `if (loggedIn)` が ref を判定しているため常に真。未ログインでも `getJoinRole?id=undefined` とマイクの取得が走り、開発モードではエラーが画面に重なる | `pages/index.vue` | 実証 | 必須 | |
 | C2 | 再参加のたびに、`joined` / `kicked` の Socket リスナーと mitt の `debug` リスナーが重複して登録される | `useSocket.ts`, `useSkyway.client.ts` | コード | 必須 | |
-| C3 | サーバーが `join` の前も `exit` の後も、`playerData` を 100ms ごとに送り続ける。ソケットごとに個別のタイマーを持つ | `backend/external/socket.js` | 実証 | 対応 | 送るのは参加中の人だけにする（参加前と退出後に使う場所はない）。タイマーは 1 つにまとめて配信する |
+| C3 | サーバーが `join` の前も `exit` の後も、`playerData` を 100ms ごとに送り続ける。ソケットごとに個別のタイマーを持つ | `backend/src/socketServer.ts` | 実証 | 対応 | 送るのは参加中の人だけにする（参加前と退出後に使う場所はない）。タイマーは 1 つにまとめて配信する |
 | C4 | `exit` の後も userMap にゲーマータグが残るため、キックの対象として見つかってしまう | 同上 | コード | 必須 | |
 | C5 | `joined` が返らないと「参加」が無限に待つ。`joining_error` 以外の失敗（トークン取得の失敗など）はメッセージが出ない | `pages/index.vue`, `useSocket.ts` | コード | 対応 | |
 | C6 | `getUserName` の失敗が原因に関係なくすべて「ニックネームエラー」になり、backend にもログが残らない | `discord.get.ts`, `discordBot.js` | 実証 | 必須 | |
 | C7 | 全 Bot のログイン後に `once('ready')` を登録しているため、人数表示が始まらない可能性がある。Bot が 0 体の場合や `tokens.json` がない場合の扱いも不正 | `discordBot.js` | 要確認（運用では、ほぼ起きていない） | 対応（優先度 低） | R4 の分割時に一緒に直す。Bot がなくても他の機能は動くようにする（D4） |
-| C8 | プレイヤーデータの検証がフィールドの有無だけで、型を見ていない | `backend/external/express.js` | コード | 対応 | S5 の「受信の保護」に含める |
+| C8 | プレイヤーデータの検証がフィールドの有無だけで、型を見ていない | `backend/src/gameReceiver.ts` | コード | 対応 | S5 の「受信の保護」に含める |
 | C9 | `themeColorLight(n)` / `themeColorDark(n)` は useState のキーが固定のため、最初の `n` の値がずっと使われる | `useComponents.ts` | コード | 対応 | |
 | C10 | 一覧の行ごとにキック確認の `v-dialog` があり、1 つの `dialog` を共有している。1 人をクリックすると行の数だけダイアログが重なって開く | `components/userList.vue` | コード | 対応 | 一覧の外に 1 つだけ置く |
 | ~~C11~~ | ~~参加パスワードの入力欄が `type="text"`~~ | `pages/index.vue` | — | 対応不要（I5） | |

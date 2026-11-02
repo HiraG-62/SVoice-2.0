@@ -49,16 +49,16 @@ backend・frontend・偽ゲームサーバーを手元で動かし、ログイ�
 ## 2. 起動（PowerShell を 3 つ開く）
 
 ```powershell
-# 1: backend（npm run dev は POSIX 形式のため Windows では使えない）
+# 1: backend
 cd E:\dev\SyakasabaVC\backend
-$env:NODE_ENV = 'dev'; node backendServer.js
+pnpm dev
 ```
 `Express server running on port 30000`、`WebSocket server running on port 3001`、`Bot #0 logged in`、`Discord server running on port 5000` が出れば OK。
 
 ```powershell
 # 2: frontend
 cd E:\dev\SyakasabaVC\frontend
-npm run dev
+pnpm dev
 ```
 http://localhost:3000 を開く。
 

@@ -1,0 +1,10 @@
+packages:
+  - frontend
+  - backend
+  - packages/*
+
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - esbuild
+  - sharp
+  - vue-demi

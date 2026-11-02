@@ -7,16 +7,16 @@
 
 ## リポジトリ構成
 - `frontend/`: Nuxt 4 アプリ（UI、音声処理 `composables/`、Nuxt server API `server/`、距離設定 `settings/`）
-- `backend/`: Node.js（CommonJS）。`external/express.js`（プレイヤーデータ受信 :30000）、`external/socket.js`（Socket.IO :3001）、`external/discordBot.js`（Bot・内部 API :5000/:1234）
+- `backend/`: Node.js + TypeScript（`src/`）。`gameReceiver.ts`（プレイヤーデータ受信 :30000）、`socketServer.ts`（Socket.IO :3001）、`discordBot.ts`（Bot・内部 API :5000/:1234）、`config.ts`（環境変数）、エントリ `index.ts`。tsup で `dist/index.cjs` にビルドする
+- `packages/shared/`: `@svoice/shared`。frontend と backend で共有する型（`PlayerData`、`IngameSettings`、Socket.IO のイベント型）と zod スキーマ
+- `tools/`: workspace 外の単体スクリプト（`capture-player-data.mjs`: Minecraft からの生データの取得）
 - `docs/specs/<taskId>.md`: タスクごとの設計書
 
 ## コマンド
-- パッケージ管理は今は **npm**（frontend と backend にそれぞれ `package-lock.json`）。大改修のフェーズ 0 で pnpm workspace に移行する予定。移行が終わるまでは npm を使う。
-- `test` / `typecheck` の npm スクリプトはない。`pnpm test` / `pnpm typecheck` の代わりに次を実行する:
-  - `node backend/test/express.test.js`
-  - `cd frontend; npm run build`
-  - 型チェック（任意。既存のエラーが app 15 件・server 6 件ある。増やさないこと）: `cd frontend; npx -y -p typescript@5.9 -p vue-tsc@3 vue-tsc --noEmit -p .nuxt/tsconfig.app.json`
-- `frontend/node_modules/.bin/tsc` は古く、Nuxt 4 の tsconfig を読めないため使わない。
+- **pnpm workspace**（ルートの `pnpm-lock.yaml`）。Node 24（`.node-version`）。npm は使わない。
+- 検証はルートで `pnpm test` / `pnpm typecheck` / `pnpm build`（各パッケージの同名スクリプトを再帰実行）。
+  - frontend の `typecheck` / `test` は `phase0-frontend` で追加予定。それまでは frontend の型チェックは任意で `cd frontend; npx -y -p typescript@5.9 -p vue-tsc@3 vue-tsc --noEmit -p .nuxt/tsconfig.app.json`（既存のエラーが app 15 件・server 6 件。増やさないこと）
+- backend を起動すると、cwd の `.env`・`env/tokens.json`（実際の Bot トークン）・`key/` を読む。**検証で backend を起動するときは、リポジトリ外の一時フォルダーを cwd にし、ダミーの値を使う**
 - ローカルでの手動確認手順は `docs/MANUAL_TEST.md`。ゲームサーバーの代わりに `node backend/scripts/fake-game-server.js <タグ...>` を使う。
 
 ## 制約

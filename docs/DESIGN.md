@@ -18,11 +18,11 @@
 | `frontend/` | Nuxt 4, Vuetify 4, `@skyway-sdk/room@2`, `socket.io-client`, `@timephy/rnnoise-wasm`, `mitt`, `nuxt-auth-utils` | UI、音声処理、Discord OAuth、内部 API へのプロキシ |
 | `backend/` | Node.js (CommonJS), express 5, socket.io 4, discord.js 14, `@discordjs/voice` | プレイヤーデータ中継、Socket.IO、Discord Bot・内部 API |
 
-backend の起動は `backend/backendServer.js` が `startExpress` / `startSocket` / `startDiscordServer` を順に呼ぶだけ。プレイヤーデータは `express.js` のモジュール変数に保持し、`getData()` で他モジュールから読む（DB なし・プロセス内メモリのみ）。
+backend の起動は `backend/src/index.ts` が設定（`config.ts`）を読み込み、受信・Socket.IO・Discord Bot を順に起動するだけ。プレイヤーデータは `gameReceiver.ts` が作る受信側のクロージャに保持し、`getData()` を他モジュールに渡す（DB なし・プロセス内メモリのみ）。各モジュールは「作る関数」と「listen する関数」に分かれ、依存を引数で差し替えられる。
 
 ## backend
 
-### `external/express.js`（ポート 30000）
+### `src/gameReceiver.ts`（ポート 30000）
 - `POST /` でプレイヤー配列を受け取り `data` に保存する。`GAME_API_SECRET` が設定されていれば `x-api-secret` ヘッダーを照合する（未設定なら無認証）。
 - `validatePlayerData`: 配列であること、各要素が `name`（空でない文字列）と下記の必須フィールドを持つこと。
 - 最後のリクエストから 5 秒経つと `data = null`（ゲームサーバー停止の検知）。
@@ -40,7 +40,7 @@ backend の起動は `backend/backendServer.js` が `startExpress` / `startSocke
 | `mute` | ゲーム側からのミュート指示（1 = トグル, 2 = ミュート, 3 = 解除） |
 | `voiceRangeOutput`, `volumeOutput`, `voiceRangeInput`, `volumeInput` | 声の届く範囲・音量の倍率（%） |
 
-### `external/socket.js`（ポート 3001、dev は http、prod は https で `./key/*.pem`）
+### `src/socketServer.ts`（ポート 3001、development は http、それ以外は https で `./key/*.pem`）
 
 | 方向 | イベント | 内容 |
 |---|---|---|
@@ -54,7 +54,7 @@ backend の起動は `backend/backendServer.js` が `startExpress` / `startSocke
 
 Socket.IO 側に認証はない。管理者専用の操作は UI で隠しているだけ。
 
-### `external/discordBot.js`
+### `src/discordBot.ts`
 - `env/tokens.json`（`{ "tokens": [...] }`）の Bot を順にログインする（1 体あたり最大 5 回リトライ）。
 - **参加人数表示**: 10 秒ごとに、プレイヤー数と同じ番号の Bot（上限 20）だけを指定ボイスチャンネルに入れる。Bot の名前で人数を見せる仕組み。
 - 内部 API（すべて `x-api-secret: API_SECRET` が必須、`id` は 17〜20 桁の数字）。リクエストのたびに使う Bot を順番に切り替える（`nextBot`）:
@@ -115,18 +115,18 @@ backend（`backend/.env`、`backend/env/tokens.json`、`backend/key/{privkey,ful
 frontend（`frontend/.env`）:
 `NUXT_APP_SECRET`（セッション暗号化。**nuxt-auth-utils 0.6 から必須**。旧 `NUXT_SESSION_PASSWORD` は使われない）, `NUXT_SKYWAY_APP_ID`, `NUXT_SKYWAY_SECRET_KEY`, `NUXT_API_SECRET`（backend の `API_SECRET` と同じ値）, `NUXT_PUBLIC_SERVER_SOCKET_URL`, `NUXT_PUBLIC_SERVER_API_URL`, `NUXT_PUBLIC_SERVER_API_SSLURL`（未使用）, `NUXT_OAUTH_DISCORD_CLIENT_ID`, `NUXT_OAUTH_DISCORD_CLIENT_SECRET`, `NUXT_OAUTH_DISCORD_REDIRECT_URL`
 
-本番・開発とも Windows 機で動かす。backend の `npm start` / `npm run dev` は `NODE_ENV=... node` という POSIX 形式で書かれているため、Windows ではそのまま動かない（`docs/OVERHAUL.md` の D2）。
+本番・開発とも Windows 機で動かす。backend は `pnpm dev`（tsx、NODE_ENV=development）/ `pnpm build` → `pnpm start`（`dist/index.cjs`、NODE_ENV=production）で、Windows でもそのまま動く。`.env`・`env/tokens.json`・`key/`・`logs/` は cwd からの相対パスで読む（pnpm のスクリプトでは cwd は `backend/`）。
 
 ## 検証方法
 
 | 対象 | コマンド | 2026-11-03 時点の結果 |
 |---|---|---|
-| backend テスト | `node backend/test/express.test.js` | 24 件すべて成功 |
-| frontend ビルド | `cd frontend; npm run build` | 成功（警告はチャンクサイズのみ） |
+| テスト | ルートで `pnpm test` | backend 81 件・shared 4 件すべて成功（2026-11-03、フェーズ 0 の 1 本目の後） |
+| 型チェック | ルートで `pnpm typecheck` | backend・shared は成功。frontend は未追加 |
+| ビルド | ルートで `pnpm build` | 成功（frontend の警告はチャンクサイズのみ） |
 | frontend 型チェック | `cd frontend; npx -y -p typescript@5.9 -p vue-tsc@3 vue-tsc --noEmit -p .nuxt/tsconfig.app.json`（server 側は `tsconfig.server.json`） | **既存のエラー: app 15 件、server 6 件**。ビルドには影響しない |
 
-- `test` / `typecheck` の npm スクリプトはない。ロックファイルは npm（pnpm へは移行していない）。
-- `backend/test/express.test.js` はロジックのコピーとソースの文字列一致を確認するもので、実際のモジュールは読み込まない。
+- pnpm workspace（Node 24）。backend のテストは実際のモジュールを読み込み、HTTP と Socket.IO を実際に通す（Discord はギルドとメンバーを偽物に差し替える）。
 - 起動スモーク（手動）: `express.js` と `socket.js` だけを起動し、POST → `join` → `playerData` / `setAdminSpeaker` / `changeSetting` / `kick` の受信、5 秒後のクリアを確認済み。Nuxt の `.output` をダミーの環境変数で起動し、未ログインの画面描画、API が 401 を返すこと、`/auth/discord` が Discord へリダイレクトすることも確認済み。
 - ログイン後のフロー（OAuth、Bot、SkyWay、ゲームサーバー）は本物の認証情報が必要なため、ローカルでは検証していない。
 

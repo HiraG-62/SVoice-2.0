@@ -1,22 +1,39 @@
 {
-  "name": "backend",
+  "name": "@svoice/backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "private": true,
+  "main": "dist/index.cjs",
   "scripts": {
-    "start": "NODE_ENV=prod node backendServer.js",
-    "dev": "NODE_ENV=dev node backendServer.js"
+    "start": "cross-env NODE_ENV=production node dist/index.cjs",
+    "dev": "cross-env NODE_ENV=development tsx watch src/index.ts",
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
-    "body-parser": "^2.4.0",
+    "@svoice/shared": "workspace:*",
     "cors": "^2.8.6",
     "discord.js": "^14.28.0",
     "dotenv": "^18.0.9",
     "express": "^5.3.0",
-    "fs": "^0.0.1-security",
-    "socket.io": "^4.8.4"
+    "socket.io": "^4.8.4",
+    "cross-env": "^10.1.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24",
+    "@types/supertest": "^7.2.1",
+    "socket.io-client": "^4.8.4",
+    "supertest": "^7.3.1",
+    "tsup": "^9.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
   }
 }
