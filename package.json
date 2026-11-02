@@ -12,7 +12,9 @@
     "typecheck": "pnpm -r --if-present typecheck && pnpm typecheck:e2e",
     "dev:e2e": "node frontend/scripts/dev.mjs --e2e",
     "e2e": "playwright test --config e2e/playwright.config.ts",
-    "typecheck:e2e": "pnpm --filter @svoice/frontend exec vue-tsc --noEmit -p ../e2e/tsconfig.json"
+    "typecheck:e2e": "pnpm --filter @svoice/frontend exec vue-tsc --noEmit -p ../e2e/tsconfig.json",
+    "check:secrets": "node frontend/scripts/check-secrets.mjs",
+    "start": "pnpm --filter @svoice/frontend start"
   },
   "pnpm": {
     "overrides": {

@@ -1,11 +1,10 @@
 import express, { type RequestHandler } from 'express';
 import http from 'node:http';
-import https from 'node:https';
-import fs from 'node:fs';
 import path from 'node:path';
 import type { BackendConfig } from './config';
 import { restrictIps } from './ipAccess';
 import { createJoinLockStore, MAX_JOIN_FAILURES } from './joinLockStore';
+import { createReloadingHttpsServer } from './tls';
 
 export const DISCORD_HTTP_PORT = 5000;
 export const DISCORD_TLS_PORT = 1234;
@@ -152,10 +151,7 @@ export function createDiscordApp({ config, fetchGuild, nextBot, logger = console
 }
 
 export function createDiscordServers(app: ReturnType<typeof createDiscordApp>, config: BackendConfig) {
-  const server = config.isDevelopment ? http.createServer(app) : https.createServer({
-    key: fs.readFileSync(config.TLS_KEY_PATH),
-    cert: fs.readFileSync(config.TLS_CERT_PATH),
-  }, app);
+  const server = config.isDevelopment ? http.createServer(app) : createReloadingHttpsServer(config.TLS_KEY_PATH, config.TLS_CERT_PATH, app);
   return { httpServer: http.createServer(app), server };
 }
 

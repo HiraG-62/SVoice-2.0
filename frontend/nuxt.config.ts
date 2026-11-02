@@ -30,30 +30,35 @@ export default defineNuxtConfig({
     },
   },
 
+  nitro: {
+    preset: 'node-listener',
+    serveStatic: true,
+  },
+
   runtimeConfig: {
     dataDir: 'data',
     devLoginEnabled: false,
     // サーバーサイドのみ（クライアントに露出しない）
-    skywayAppId: process.env.NUXT_SKYWAY_APP_ID || '',
-    skywaySecretKey: process.env.NUXT_SKYWAY_SECRET_KEY || '',
-    apiSecret: process.env.NUXT_API_SECRET || '',
+    skywayAppId: '',
+    skywaySecretKey: '',
+    apiSecret: '',
     public: {
       skywayRoomName: 'test',
       server: {
         socket: {
-          url: process.env.NUXT_PUBLIC_SERVER_SOCKET_URL || '',
+          url: '',
         },
         api: {
-          url: process.env.NUXT_PUBLIC_SERVER_API_URL || '',
-          sslurl: process.env.NUXT_PUBLIC_SERVER_API_SSLURL || ''
+          url: '',
+          sslurl: ''
         }
       }
     },
     oauth: {
       discord: {
-        clientId: process.env.NUXT_OAUTH_DISCORD_CLIENT_ID || '',
-        clientSecret: process.env.NUXT_OAUTH_DISCORD_CLIENT_SECRET || '',
-        redirectURL: process.env.NUXT_OAUTH_DISCORD_REDIRECT_URL || '',
+        clientId: '',
+        clientSecret: '',
+        redirectURL: '',
       },
     }
   },

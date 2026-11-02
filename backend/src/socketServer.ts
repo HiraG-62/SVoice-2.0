@@ -1,12 +1,11 @@
 import http from 'node:http';
-import https from 'node:https';
-import fs from 'node:fs';
 import path from 'node:path';
 import { Server } from 'socket.io';
 import type { ClientToServerEvents, PlayerData, ServerToClientEvents } from '@svoice/shared';
 import { verifySocketToken, type SocketTokenPayload } from '@svoice/shared/socket-token';
 import type { BackendConfig } from './config';
 import { createDebugLimiter, createDebugWriter } from './debugLog';
+import { createReloadingHttpsServer } from './tls';
 
 export const SOCKET_PORT = 3001;
 export const PLAYER_DATA_INTERVAL_MS = 100;
@@ -21,10 +20,7 @@ interface SocketServerDependencies {
 }
 
 export function createSocketServer({ config, getData, logsDirectory = path.join(config.DATA_DIR, 'logs'), now = () => new Date(), logger = console }: SocketServerDependencies) {
-  const server = config.isDevelopment ? http.createServer() : https.createServer({
-    key: fs.readFileSync(config.TLS_KEY_PATH),
-    cert: fs.readFileSync(config.TLS_CERT_PATH),
-  });
+  const server = config.isDevelopment ? http.createServer() : createReloadingHttpsServer(config.TLS_KEY_PATH, config.TLS_CERT_PATH);
   const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketTokenPayload>(server, {
     cors: { origin: config.SERVER_URL, methods: ['GET', 'POST'] },
   });
