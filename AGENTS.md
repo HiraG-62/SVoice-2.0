@@ -22,7 +22,8 @@
 ## 制約
 - 秘密情報（`backend/.env`、`backend/env/tokens.json`、`backend/key/`、`frontend/.env`）は git 管理外。値を読んだりログやコミットに出したりしない。
 - ログイン後のフロー（Discord OAuth・Bot・SkyWay・ゲームサーバー）は本物の認証情報がないとローカルで再現できない。変更したら、どこまで検証したかを報告に書く。
-- `frontend/settings/setting.json` は本番の運営が UI から書き換えるデータ。コードの変更ついでに値を変えない。
+- 距離設定の実データは `frontend/<NUXT_DATA_DIR>/setting.json`（既定 `frontend/data/`、git 管理外）。本番の運営が UI から書き換えるデータなので、コードの変更ついでに値を変えない。`frontend/settings/default.json` は「デフォルトに戻す」の値で、`settings/setting.json` は初回移行の元（git 管理外）
+- 開発は、ルートの `pnpm dev`（backend・frontend・偽ゲームサーバーの一括起動）と開発用ログイン（`nuxt dev` かつ `NUXT_DEV_LOGIN_ENABLED=true` のときだけ使える）で行う。手順は `docs/MANUAL_TEST.md`。frontend は `FRONTEND_ENV_FILE`、backend は `ENV_FILE` で `.env` を差し替えられる
 - ゲームサーバーとの契約（`POST /` のプレイヤー配列の形）と Socket.IO のイベント名は、ゲームや運用と結びついている。変える場合は設計書に明記する。
 - UI の文言は日本語。
 

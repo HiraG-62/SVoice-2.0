@@ -1,8 +1,10 @@
 import fs from 'fs';
 import type { IngameSettings } from '@svoice/shared';
+import { getSettingStore } from '../utils/settingStore';
 
 export default defineEventHandler(async (event) => {
-  const setting: IngameSettings = await JSON.parse((fs.readFileSync('settings/setting.json')).toString());
+  const { file } = getSettingStore(useRuntimeConfig(event).dataDir);
+  const setting: IngameSettings = JSON.parse(fs.readFileSync(file, 'utf8'));
 
   return setting;
 })

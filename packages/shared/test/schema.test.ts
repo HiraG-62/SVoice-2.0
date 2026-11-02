@@ -3,8 +3,8 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { ingameSettingsSchema, playerDataSchema, PLAYER_DATA_FIELDS, type PlayerData } from '../src/index';
 
 describe('共有スキーマ', () => {
-  it.each(['default', 'setting'])('%s.json を読み込める', (name) => {
-    const data: unknown = JSON.parse(readFileSync(new URL(`../../../frontend/settings/${name}.json`, import.meta.url), 'utf8'));
+  it('default.json を読み込める', () => {
+    const data: unknown = JSON.parse(readFileSync(new URL('../../../frontend/settings/default.json', import.meta.url), 'utf8'));
     expect(ingameSettingsSchema.safeParse(data).success).toBe(true);
   });
 

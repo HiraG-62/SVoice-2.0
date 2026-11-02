@@ -1,4 +1,9 @@
+const DEFAULT_FRONTEND_PORT = 3000;
+
 export default defineNuxtConfig({
+  devServer: {
+    port: Number(process.env.NUXT_PORT || DEFAULT_FRONTEND_PORT),
+  },
   modules: [
     '@nuxt/image',
     'nuxt-auth-utils'
@@ -25,11 +30,14 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
+    dataDir: 'data',
+    devLoginEnabled: false,
     // サーバーサイドのみ（クライアントに露出しない）
     skywayAppId: process.env.NUXT_SKYWAY_APP_ID || '',
     skywaySecretKey: process.env.NUXT_SKYWAY_SECRET_KEY || '',
     apiSecret: process.env.NUXT_API_SECRET || '',
     public: {
+      skywayRoomName: 'test',
       server: {
         socket: {
           url: process.env.NUXT_PUBLIC_SERVER_SOCKET_URL || '',
@@ -47,6 +55,15 @@ export default defineNuxtConfig({
         redirectURL: process.env.NUXT_OAUTH_DISCORD_REDIRECT_URL || '',
       },
     }
+  },
+
+  $development: {
+    runtimeConfig: {
+      public: {
+        devLoginEnabled: process.env.NUXT_DEV_LOGIN_ENABLED === 'true',
+        devLoginPresets: process.env.NUXT_PUBLIC_DEV_LOGIN_PRESETS || '',
+      },
+    },
   },
 
   compatibilityDate: '2024-10-27',

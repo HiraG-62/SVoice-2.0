@@ -2,13 +2,22 @@
   "name": "svoice",
   "private": true,
   "packageManager": "pnpm@10.14.0",
-  "engines": { "node": ">=24 <25" },
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
+    "dev": "node frontend/scripts/dev.mjs",
     "build": "pnpm -r --if-present build",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck"
   },
   "pnpm": {
-    "overrides": { "glob": "^14.0.3", "minimatch": "^11.0.4" }
+    "overrides": {
+      "glob": "^14.0.3",
+      "minimatch": "^11.0.4"
+    }
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
   }
 }

@@ -10,7 +10,7 @@
                                                         ├─▶ backend/socket.js (3001) ──playerData 100ms──▶ ブラウザ
                                                         └─▶ backend/discordBot.js（参加人数 Bot 表示）
 ブラウザ ──HTTP──▶ frontend (Nuxt server/api) ──x-api-secret──▶ backend/discordBot.js 内部API (5000 http / 1234 https)
-ブラウザ ◀──SFU──▶ SkyWay（音声本体。ルーム名 `test`）
+ブラウザ ◀──SFU──▶ SkyWay（音声本体。ルーム名は `NUXT_PUBLIC_SKYWAY_ROOM_NAME`、既定 `test`）
 ```
 
 | ディレクトリ | 技術 | 役割 |
@@ -100,7 +100,7 @@ Socket.IO 側に認証はない。管理者専用の操作は UI で隠してい
 6. 距離 ≤ min → 1、距離 ≥ max → `general.minVolume`、その間は線形に減衰する。最終値は `距離音量 × 係数 × volume`。
 
 ### 設定ファイル
-- `frontend/settings/setting.json`: 現在の距離設定。管理者が `/api/setSetting` で上書きする（プロセスの cwd からの相対パス）。
+- `<NUXT_DATA_DIR>/setting.json`（既定 `frontend/data/setting.json`、git 管理外）: 現在の距離設定。管理者が `/api/setSetting` で上書きする。相対パスは frontend の起動時の cwd から解決する。ファイルがなければ起動時に旧 `settings/setting.json`（なければ `default.json`）からコピーする。
 - `frontend/settings/default.json`: 「デフォルトに戻す」で読み込む初期値。
 - localStorage: `micLevel`、`phoneLevel`、相手のゲーマータグをキーにしたユーザー別 gain。
 
@@ -113,7 +113,9 @@ backend（`backend/.env`、`backend/env/tokens.json`、`backend/key/{privkey,ful
 `NODE_ENV`(development|production。スクリプトが設定), `SERVER_URL`(CORS 許可元), `DISCORD_SERVER_ID`, `DISCORD_SERVER_ROOM_ID`, `DISCORD_SERVER_ROLE_ID_ADMIN`, `DISCORD_SERVER_ROLE_ID_PHONE`, `DISCORD_SERVER_ROLE_ID_JOIN`, `JOIN_PASSWORD`（必須）, `API_SECRET`（必須）, `GAME_API_SECRET`（任意）, ポート（`GAME_RECEIVER_PORT` / `SOCKET_PORT` / `DISCORD_HTTP_PORT` / `DISCORD_TLS_PORT`。既定は本番の値、開発は +100）, パス（`TLS_KEY_PATH` / `TLS_CERT_PATH` / `DISCORD_TOKENS_PATH` / `DATA_DIR`）, `DISCORD_ENABLED`（false で Bot・ロール操作を止め、内部 API は固定の応答を返す）, `DISCORD_MEMBER_COUNT_ENABLED`（false で人数表示だけ止める）。`ENV_FILE` で `.env` の場所を差し替えられる
 
 frontend（`frontend/.env`）:
-`NUXT_APP_SECRET`（セッション暗号化。**nuxt-auth-utils 0.6 から必須**。旧 `NUXT_SESSION_PASSWORD` は使われない）, `NUXT_SKYWAY_APP_ID`, `NUXT_SKYWAY_SECRET_KEY`, `NUXT_API_SECRET`（backend の `API_SECRET` と同じ値）, `NUXT_PUBLIC_SERVER_SOCKET_URL`, `NUXT_PUBLIC_SERVER_API_URL`, `NUXT_PUBLIC_SERVER_API_SSLURL`（未使用）, `NUXT_OAUTH_DISCORD_CLIENT_ID`, `NUXT_OAUTH_DISCORD_CLIENT_SECRET`, `NUXT_OAUTH_DISCORD_REDIRECT_URL`
+`NUXT_APP_SECRET`（セッション暗号化。**nuxt-auth-utils 0.6 から必須**。旧 `NUXT_SESSION_PASSWORD` は使われない）, `NUXT_SKYWAY_APP_ID`, `NUXT_SKYWAY_SECRET_KEY`, `NUXT_API_SECRET`（backend の `API_SECRET` と同じ値）, `NUXT_PUBLIC_SERVER_SOCKET_URL`, `NUXT_PUBLIC_SERVER_API_URL`, `NUXT_PUBLIC_SERVER_API_SSLURL`（未使用）, `NUXT_OAUTH_DISCORD_CLIENT_ID`, `NUXT_OAUTH_DISCORD_CLIENT_SECRET`, `NUXT_OAUTH_DISCORD_REDIRECT_URL`, `NUXT_PUBLIC_SKYWAY_ROOM_NAME`（既定 `test`）, `NUXT_DATA_DIR`（既定 `data`）, `NUXT_PORT`（開発サーバー。既定 3000）, `NUXT_DEV_LOGIN_ENABLED` / `NUXT_PUBLIC_DEV_LOGIN_PRESETS`（開発用ログイン。`nuxt dev` のときだけ有効）。キーの一覧と説明は `frontend/.env.example`。`FRONTEND_ENV_FILE` で読み込む `.env` を差し替えられる（`frontend/scripts/nuxt.mjs`）
+
+開発用ログイン: `POST /auth/dev`（`{ gamerTag, admin }`）。`import.meta.dev` かつ `NUXT_DEV_LOGIN_ENABLED=true` のときだけ動き、それ以外は 404。`discordId` は `gamerTag` から作る 18 桁の偽の ID。backend を `DISCORD_ENABLED=false` で動かすと、参加ロールは常に true になる。
 
 本番・開発とも Windows 機で動かす。backend は `pnpm dev`（tsx、NODE_ENV=development）/ `pnpm build` → `pnpm start`（`dist/index.cjs`、NODE_ENV=production）で、Windows でもそのまま動く。`.env`・`env/tokens.json`・`key/`・`logs/` は cwd からの相対パスで読む（pnpm のスクリプトでは cwd は `backend/`）。
 

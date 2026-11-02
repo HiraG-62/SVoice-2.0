@@ -1,6 +1,7 @@
 import { defineEventHandler, readBody } from 'h3'
 import fs from 'fs';
 import type { IngameSettings } from '@svoice/shared';
+import { getSettingStore } from '../utils/settingStore';
 
 export default defineEventHandler(async (event) => {
   const session = await getUserSession(event);
@@ -15,5 +16,6 @@ export default defineEventHandler(async (event) => {
 
   const body: IngameSettings = await readBody(event);
 
-  fs.writeFileSync('settings/setting.json', JSON.stringify(body));
+  const { file } = getSettingStore(useRuntimeConfig(event).dataDir);
+  fs.writeFileSync(file, JSON.stringify(body));
 })

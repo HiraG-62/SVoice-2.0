@@ -86,7 +86,7 @@ export async function useConnectSkyway(gamerTag: string) {
     const context = await SkyWayContext.Create(token);
     const room = await SkyWayRoom.FindOrCreate(context, {
       type: 'sfu',
-      name: 'test',
+      name: useRuntimeConfig().public.skywayRoomName,
     });
 
     const spaceMorse = '....__..__._..';

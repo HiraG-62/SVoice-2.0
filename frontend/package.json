@@ -4,12 +4,12 @@
   "type": "module",
   "scripts": {
     "start": "node .output/server/index.mjs",
-    "build": "nuxt build",
-    "dev": "nuxt dev --host",
-    "generate": "nuxt generate",
-    "preview": "nuxt preview",
-    "postinstall": "nuxt prepare",
-    "typecheck": "nuxi typecheck",
+    "build": "node scripts/nuxt.mjs build",
+    "dev": "node scripts/nuxt.mjs dev --host 0.0.0.0",
+    "generate": "node scripts/nuxt.mjs generate",
+    "preview": "node scripts/nuxt.mjs preview",
+    "postinstall": "node scripts/nuxt.mjs prepare",
+    "typecheck": "node scripts/nuxt.mjs typecheck",
     "test": "vitest run"
   },
   "dependencies": {

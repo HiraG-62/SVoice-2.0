@@ -159,6 +159,9 @@ onMounted(async () => {
                         <v-col cols="12" class="text-center">
                           <v-btn @click="loginClick" color="#5865f2" width="200">ログイン</v-btn>
                         </v-col>
+                        <v-col cols="12">
+                          <DevLogin />
+                        </v-col>
                       </v-row>
                     </div>
                   </template>
