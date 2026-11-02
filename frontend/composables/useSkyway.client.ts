@@ -30,7 +30,8 @@ export async function useConnectSkyway(gamerTag: string) {
       userList,
       nearbyUserList,
       playerData,
-      adminSpeaker
+      adminSpeaker,
+      ingameSettings
     } = useComponents();
 
     // サーバーサイドから安全にSkyWay認証情報を取得
@@ -123,6 +124,19 @@ export async function useConnectSkyway(gamerTag: string) {
     let hasPhone = 0;
     let isMute = 0;
     let isProcessingDataCycle = false;
+    let isReloadingSettings = false;
+
+    const reloadIngameSettings = async () => {
+      if (isReloadingSettings) return;
+      isReloadingSettings = true;
+      try {
+        await getIngameSettings();
+      } catch (err) {
+        console.error('距離設定の読み込み失敗', err);
+      } finally {
+        isReloadingSettings = false;
+      }
+    }
 
     on('debug', () => {
       const socket = $socket;
@@ -331,6 +345,11 @@ export async function useConnectSkyway(gamerTag: string) {
 
     on('dataCycle', async () => {
       if (!playerData.value) return;
+      // 距離設定がないまま音量を計算すると例外になるため、読み込み直して次の周期で計算する
+      if (!ingameSettings.value) {
+        void reloadIngameSettings();
+        return;
+      }
       if (isProcessingDataCycle) return;
       isProcessingDataCycle = true;
 

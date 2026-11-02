@@ -20,6 +20,7 @@
 - ローカルでの手動確認手順は `docs/MANUAL_TEST.md`。ゲームサーバーの代わりに `pnpm --filter @svoice/backend fake-game <タグ...>`（`--scenario` / `--replay` あり）を使う。
 
 ## 制約
+- **ユーザーの許可なく、作業用のフォルダー（git worktree、リポジトリのコピーなど）を作らない。** 作業と動作確認は `E:\dev\SyakasabaVC` の作業ツリーで行う。ユーザーが動かしている開発サーバーと衝突しそうなときは、別の場所に環境を作らず、ユーザーに確認する
 - 秘密情報（`backend/.env`、`backend/env/tokens.json`、`backend/key/`、`frontend/.env`）は git 管理外。値を読んだりログやコミットに出したりしない。
 - ログイン後のフロー（Discord OAuth・Bot・SkyWay・ゲームサーバー）は本物の認証情報がないとローカルで再現できない。変更したら、どこまで検証したかを報告に書く。
 - 距離設定の実データは `frontend/<NUXT_DATA_DIR>/setting.json`（既定 `frontend/data/`、git 管理外）。本番の運営が UI から書き換えるデータなので、コードの変更ついでに値を変えない。`frontend/settings/default.json` は「デフォルトに戻す」の値で、`settings/setting.json` は初回移行の元（git 管理外）

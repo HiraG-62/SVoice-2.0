@@ -2,11 +2,13 @@ import type { Socket } from 'socket.io-client'
 import type { ClientToServerEvents, ServerToClientEvents } from '@svoice/shared';
 import { useCusEvent } from './useCusEvent';
 
-let socket: Socket<ServerToClientEvents, ClientToServerEvents>;
+type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
+
+// 開発時の HMR でこのモジュールが再実行されても参照を失わないよう、プラグインが提供するソケットを毎回取り出す
+const getSocket = (): AppSocket => useNuxtApp().$socket;
 
 export async function useConnectSocket() {
-  const { $socket } = useNuxtApp();
-  socket = $socket;
+  const socket = getSocket();
 
   const { emit } = useCusEvent();
 
@@ -50,6 +52,7 @@ export async function useConnectSocket() {
 }
 
 export function useDisconnectSocket() {
+  const socket = getSocket();
   socket.emit('exit');
   socket.off('joined');
   socket.off('playerData');
@@ -58,21 +61,17 @@ export function useDisconnectSocket() {
 }
 
 export function useSetSettingSocket() {
-  if (!socket) {
-    const { $socket } = useNuxtApp();
-    socket = $socket;
-  }
-  socket.emit('changeSetting', 'change');
+  getSocket().emit('changeSetting', 'change');
 }
 
 export function useOnAdminSpeaker() {
-  socket.emit('onSpeaker');
+  getSocket().emit('onSpeaker');
 }
 
 export function useOffAdminSpeaker() {
-  socket.emit('offSpeaker');
+  getSocket().emit('offSpeaker');
 }
 
 export function useKick(gamerTag: string) {
-  socket.emit('kick', gamerTag);
+  getSocket().emit('kick', gamerTag);
 }
