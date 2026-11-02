@@ -118,7 +118,8 @@ export async function useConnectSkyway(gamerTag: string) {
     }
 
     const memberHandlers = new Map<string, MemberHandler>();
-    let playerVolume = new Map<string, number>();
+    // 音量計算（changeGain）が距離の更新に追従するよう、Map を差し替えるたびに変更を通知する
+    const playerVolume = shallowRef(new Map<string, number>());
     let hasPhone = 0;
     let isMute = 0;
     let isProcessingDataCycle = false;
@@ -140,7 +141,7 @@ export async function useConnectSkyway(gamerTag: string) {
           voice: user.voice,
         })),
         memberHandlers: Array.from(memberHandlers.keys()),
-        playerVolume: Array.from(playerVolume.entries()),
+        playerVolume: Array.from(playerVolume.value.entries()),
       }
 
       console.log(debugData);
@@ -260,7 +261,7 @@ export async function useConnectSkyway(gamerTag: string) {
         // 距離ベースのgain計算
         const changeGain = computed(() => {
           let vol = 0;
-          if (playerVolume.get(pubName) != undefined) vol = playerVolume.get(pubName)!;
+          if (playerVolume.value.get(pubName) != undefined) vol = playerVolume.value.get(pubName)!;
           if (adminSpeaker.value.has(pubName)) vol = 1;
           return 2 * nearbyUserInfo.gain * vol * (phoneLevel.value / 100);
         })
@@ -357,12 +358,12 @@ export async function useConnectSkyway(gamerTag: string) {
 
           // 距離による音量計算
           const distanceData = getDistance(selfData);
-          playerVolume = calcPlayerVolume(selfData, distanceData);
+          playerVolume.value = calcPlayerVolume(selfData, distanceData);
 
           const promises: Promise<void>[] = [];
           memberHandlers.forEach((handler, name) => {
             const shouldSubscribe =
-              adminSpeaker.value.has(name) || (playerVolume.get(name) ?? 0) > 0;
+              adminSpeaker.value.has(name) || (playerVolume.value.get(name) ?? 0) > 0;
             promises.push(handler.handleCycle(shouldSubscribe));
           })
           await Promise.all(promises);
