@@ -91,6 +91,9 @@ importers:
       '@skyway-sdk/room':
         specifier: ^2.5.1
         version: 2.5.1(ws@8.22.1)
+      '@skyway-sdk/token':
+        specifier: ^2.1.5
+        version: 2.1.5
       '@svoice/shared':
         specifier: workspace:*
         version: link:../packages/shared

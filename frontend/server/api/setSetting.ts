@@ -1,20 +1,13 @@
 import { defineEventHandler, readBody } from 'h3'
 import fs from 'fs';
-import type { IngameSettings } from '@svoice/shared';
 import { getSettingStore } from '../utils/settingStore';
+import { requireAdmin } from '../utils/user';
+import { parseSettings } from '../utils/settingsValidation';
 
 export default defineEventHandler(async (event) => {
-  const session = await getUserSession(event);
-  if (!session?.user) {
-    throw createError({ statusCode: 401, message: 'Unauthorized' });
-  }
-
-  const user = session.user;
-  if (!user.discordAuth) {
-    throw createError({ statusCode: 403, message: 'Admin permission required' });
-  }
-
-  const body: IngameSettings = await readBody(event);
+  await requireAdmin(event);
+  const body = parseSettings(await readBody<unknown>(event));
+  if (!body) throw createError({ statusCode: 400, message: '設定値不正' });
 
   const { file } = getSettingStore(useRuntimeConfig(event).dataDir);
   fs.writeFileSync(file, JSON.stringify(body));

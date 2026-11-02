@@ -2,9 +2,9 @@ import { sendRedirect } from 'nuxt/server';
 
 export default defineOAuthDiscordEventHandler({
   config: {
-    emailRequired: true, // ユーザーのメールアドレスを取得する
+    scope: ['identify'],
   },
-  async onSuccess(event, { user, tokens }) {
+  async onSuccess(event, { user }) {
     const config = useRuntimeConfig();
     const discordId = user.id;
     let gamerTag: string;
@@ -22,8 +22,10 @@ export default defineOAuthDiscordEventHandler({
         headers: apiHeaders
       })
     } catch(err) {
-      console.log(err);
-      return sendRedirect(event, '/?error=discrod_nickname_error')
+      const reason = err && typeof err === 'object' && 'data' in err
+        && err.data && typeof err.data === 'object' && 'error' in err.data ? err.data.error : 'internal_error';
+      const error = reason === 'nickname_missing' || reason === 'member_not_found' ? reason : 'internal_error';
+      return sendRedirect(event, `/?error=${error}`)
     }
 
     await setUserSession(event, {
@@ -35,7 +37,7 @@ export default defineOAuthDiscordEventHandler({
   },
 
   onError(event, error) {
-    console.error('Discord OAuth error:', error)
+    console.error('Discord OAuth 失敗')
     return sendRedirect(event, '/?error=authentication_error')
   },
 })

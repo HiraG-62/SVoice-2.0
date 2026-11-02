@@ -16,8 +16,9 @@
     "@mdi/font": "^7.4.47",
     "@nuxt/image": "^2.2.1",
     "@nuxt/kit": "^4.6.3",
-    "@svoice/shared": "workspace:*",
     "@skyway-sdk/room": "^2.5.1",
+    "@skyway-sdk/token": "^2.1.5",
+    "@svoice/shared": "workspace:*",
     "@timephy/rnnoise-wasm": "^1.0.0",
     "mitt": "^3.0.1",
     "nuxt": "^4.6.3",
@@ -30,7 +31,7 @@
   },
   "devDependencies": {
     "typescript": "~5.9.3",
-    "vue-tsc": "^3.0.0",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "vue-tsc": "^3.0.0"
   }
 }

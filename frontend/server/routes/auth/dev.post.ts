@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
 
   const discordId = createDevDiscordId(login.gamerTag);
   await setUserSession(event, {
-    user: { discordId, discordAuth: login.admin, gamerTag: login.gamerTag },
+    user: { discordId, discordAuth: login.admin, gamerTag: login.gamerTag, devLogin: true },
     loggedInAt: new Date(),
   });
   return { discordId };

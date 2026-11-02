@@ -1,25 +1,18 @@
-import type { LocalAudioStream, LocalSFURoomMember, RoomPublication } from '@skyway-sdk/room';
+import type { LocalAudioStream, LocalSFURoomMember, RoomPublication, SFURoom } from '@skyway-sdk/room';
 import { useCusEvent } from './useCusEvent';
-import type { PlayerData } from '@svoice/shared';
+import { decodeMemberName, type PlayerData } from '@svoice/shared';
 
 export async function useConnectSkyway(gamerTag: string) {
   if (typeof window !== 'undefined' && !import.meta.env.SSR) {
     const {
-      nowInSec,
-      SkyWayAuthToken,
       SkyWayContext,
       SkyWayRoom,
-      uuidV4,
       LocalAudioStream,
       RemoteAudioStream
     } = await import('@skyway-sdk/room');
 
-    const { session } = useUserSession();
-
-    const discordId = session.value?.user?.discordId;
-
     const { on, off, emit } = useCusEvent();
-    const { $socket } = useNuxtApp();
+    const sendDebug = useNuxtApp().$voiceSocket.debug;
 
     const {
       audioContext,
@@ -34,70 +27,23 @@ export async function useConnectSkyway(gamerTag: string) {
       ingameSettings
     } = useComponents();
 
-    // サーバーサイドから安全にSkyWay認証情報を取得
-    const skywayConfig = await $fetch('/api/getSkywayToken');
-    const appId = skywayConfig.appId as string;
-    const secretKey = skywayConfig.secretKey as string;
-
-
-    const token = new SkyWayAuthToken({
-      jti: uuidV4(),
-      iat: nowInSec(),
-      exp: nowInSec() + 60 * 60 * 24,
-      scope: {
-        app: {
-          id: appId,
-          turn: true,
-          actions: ['read'],
-          channels: [
-            {
-              id: '*',
-              name: '*',
-              actions: ['write'],
-              members: [
-                {
-                  id: '*',
-                  name: '*',
-                  actions: ['write'],
-                  publication: {
-                    actions: ['write'],
-                  },
-                  subscription: {
-                    actions: ['write'],
-                  },
-                },
-              ],
-
-              sfuBots: [
-                {
-                  actions: ['write'],
-                  forwardings: [
-                    {
-                      actions: ['write'],
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      },
-    }).encode(secretKey);
-
+    const { token, roomName, memberName: joinName } = await $fetch('/api/skywayToken');
     const context = await SkyWayContext.Create(token);
-    const room = await SkyWayRoom.FindOrCreate(context, {
-      type: 'sfu',
-      name: useRuntimeConfig().public.skywayRoomName,
-    });
-
-    const spaceMorse = '....__..__._..';
-    const joinName = gamerTag.replace(/ /g, spaceMorse);
+    let room: SFURoom;
+    try {
+      room = await SkyWayRoom.FindOrCreate(context, { type: 'sfu', name: roomName });
+    } catch (error) {
+      await context.dispose();
+      throw error;
+    }
 
     let me: LocalSFURoomMember;
 
     try {
       me = await room.join({ name: joinName });
     } catch (err) {
+      await room.dispose();
+      await context.dispose();
       throw 'joining_error';
     }
 
@@ -105,9 +51,14 @@ export async function useConnectSkyway(gamerTag: string) {
       const { stream } = micDest.value
       const selfStream = new LocalAudioStream(stream.getTracks()[0]!);
 
-      await me.publish(selfStream, {
-        maxSubscribers: 99
-      });
+      try {
+        await me.publish(selfStream, { maxSubscribers: 99 });
+      } catch (error) {
+        await me.leave();
+        await room.dispose();
+        await context.dispose();
+        throw error;
+      }
     }
 
     // ユーザーごとのハンドラ（クロージャで状態を閉じ込める）
@@ -138,8 +89,7 @@ export async function useConnectSkyway(gamerTag: string) {
       }
     }
 
-    on('debug', () => {
-      const socket = $socket;
+    const debug = () => {
       const jpNowStr = new Intl.DateTimeFormat('ja-JP', {
         timeZone: 'Asia/Tokyo',
         year: 'numeric', month: '2-digit', day: '2-digit',
@@ -159,12 +109,13 @@ export async function useConnectSkyway(gamerTag: string) {
       }
 
       console.log(debugData);
-      socket.emit('debug', debugData);
-    })
+      sendDebug(debugData);
+    };
+    on('debug', debug);
 
     const addJoinMember = (publication: RoomPublication) => {
       const publisher = publication.publisher;
-      const pubName = publisher.name!.replace(/....__..__._../g, ' ');
+      const pubName = decodeMemberName(publisher.name!);
 
       if (publisher.id === me.id) return;
 
@@ -362,9 +313,9 @@ export async function useConnectSkyway(gamerTag: string) {
           // スマホ所持確認
           if (hasPhone != selfData.hasTelephone) {
             if (hasPhone == 0) {
-              $fetch(`/api/setPhoneRole?id=${discordId}`)
+              $fetch('/api/setPhoneRole')
             } else {
-              $fetch(`/api/removePhoneRole?id=${discordId}`)
+              $fetch('/api/removePhoneRole')
             }
           }
           hasPhone = selfData.hasTelephone;
@@ -412,12 +363,15 @@ export async function useConnectSkyway(gamerTag: string) {
 
       off('dataCycle');
       off('exit');
+      off('debug', debug);
 
       await me.leave();
+      await room.dispose();
+      await context.dispose();
     })
 
     const leftMemberDettach = (name: string) => {
-      const pubName = name.replace(/....__..__._../g, ' ');
+      const pubName = decodeMemberName(name);
       const handler = memberHandlers.get(pubName);
       if (handler) {
         handler.remove();

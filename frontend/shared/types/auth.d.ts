@@ -3,6 +3,7 @@ declare module '#auth-utils' {
     discordId: string;
     discordAuth: boolean;
     gamerTag: string;
+    devLogin?: boolean;
   }
 }
 

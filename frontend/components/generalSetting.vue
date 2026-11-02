@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import type { Socket } from 'socket.io-client';
-
 const { loggedIn, clear } = useUserSession();
-const { $socket } = useNuxtApp()
 const { emit } = useCusEvent()
 
 const logout = () => {
-  const socket = $socket as Socket;
-  socket.disconnect();
+  emit('exit', 'exit');
+  useDisconnectSocket();
+  useComponents().isJoining.value = false;
   clear();
 }
 

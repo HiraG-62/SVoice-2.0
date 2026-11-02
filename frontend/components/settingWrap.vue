@@ -39,9 +39,10 @@ defineExpose({
         <v-toolbar-title>設定</v-toolbar-title>
       </v-toolbar>
       <v-tabs v-model="settingTabs" :color="themeColorDark(1).value" fixed-tabs>
-        <v-tab value="general" width="33%">一般</v-tab>
-        <v-tab value="sound" width="33%">サウンド</v-tab>
-        <v-tab v-if="discordAuth" value="ingame" width="33%">インゲーム</v-tab>
+        <v-tab value="general">一般</v-tab>
+        <v-tab value="sound">サウンド</v-tab>
+        <v-tab v-if="discordAuth" value="ingame">インゲーム</v-tab>
+        <v-tab v-if="discordAuth" value="joinLocks">参加ロック</v-tab>
       </v-tabs>
       <v-tabs-window v-model="settingTabs" style="overflow-y: auto;">
         <v-tabs-window-item value="general">
@@ -50,8 +51,11 @@ defineExpose({
         <v-tabs-window-item value="sound">
           <voice-setting v-model="setting" class="mt-10" />
         </v-tabs-window-item>
-        <v-tabs-window-item value="ingame">
+        <v-tabs-window-item v-if="discordAuth" value="ingame">
           <ingame-setting v-model="setting" class="mt-10" />
+        </v-tabs-window-item>
+        <v-tabs-window-item v-if="discordAuth" value="joinLocks">
+          <join-locks class="mt-10" />
         </v-tabs-window-item>
       </v-tabs-window>
     </v-card>

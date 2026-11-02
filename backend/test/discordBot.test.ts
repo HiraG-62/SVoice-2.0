@@ -4,7 +4,7 @@ import { calculateBotIndex, createDiscordApp, loginWithRetry, validateDiscordId,
 import { config } from './fixtures';
 
 const id = '123456789012345678';
-const endpoints = ['getUserName', 'getJoinRole', 'setJoinRole', 'checkAdminRole', 'setPhoneRole', 'removePhoneRole'];
+const endpoints = ['getUserName', 'getJoinRole', 'checkAdminRole', 'setPhoneRole', 'removePhoneRole'];
 function setup(nickname: string | null = '[Player1]', roleIds: string[] = [], discordEnabled = true) {
   const roles = new Set(roleIds);
   const member: DiscordMember = {
@@ -24,7 +24,7 @@ function setup(nickname: string | null = '[Player1]', roleIds: string[] = [], di
 describe('Discord 内部 API', () => {
   it.each([
     ['getJoinRole', true], ['checkAdminRole', false],
-    ['setJoinRole', { success: true }], ['setPhoneRole', { success: true }], ['removePhoneRole', { success: true }],
+    ['setPhoneRole', { success: true }], ['removePhoneRole', { success: true }],
     ['getUserName', { error: 'discord_unavailable' }],
   ] as const)('Discord 無効時の %s は Discord に問い合わせない', async (endpoint, expected) => {
     const { app, fetchGuild, nextBot } = setup(null, [], false);
@@ -43,24 +43,20 @@ describe('Discord 内部 API', () => {
     expect(fetchGuild).not.toHaveBeenCalled();
   });
 
-  it('Discord 無効時も参加パスワードを照合する', async () => {
-    const { app } = setup(null, [], false);
-    await request(app).post('/checkJoinPass').send({ pass: config.JOIN_PASSWORD }).expect(401);
-    for (const pass of [config.JOIN_PASSWORD, 'wrong']) {
-      await request(app).post('/checkJoinPass').set('x-api-secret', config.API_SECRET).send({ pass })
-        .expect(200, String(pass === config.JOIN_PASSWORD));
-    }
-    await request(app).post('/checkJoinPass').set('x-api-secret', config.API_SECRET).send({ pass: 123 }).expect(400);
+  it('旧参加認証エンドポイントは廃止する', async () => {
+    const { app } = setup();
+    await request(app).post('/checkJoinPass').set('x-api-secret', config.API_SECRET).send({ pass: 'wrong' }).expect(404);
+    await request(app).get(`/setJoinRole?id=${id}`).set('x-api-secret', config.API_SECRET).expect(404);
   });
 
   it.each([null, undefined, 12345678901234567])('文字列以外の ID を拒否する: %s', (invalid) => {
     expect(validateDiscordId(invalid)).toBe(false);
   });
 
-  it.each([...endpoints, 'checkJoinPass'])('%s で未認証・不一致を拒否する', async (endpoint) => {
+  it.each(endpoints)('%s で未認証・不一致を拒否する', async (endpoint) => {
     const { app, fetchGuild } = setup();
     for (const secret of [undefined, 'wrong']) {
-      const req = endpoint === 'checkJoinPass' ? request(app).post(`/${endpoint}`).send({ pass: 'test-password' }) : request(app).get(`/${endpoint}?id=${id}`);
+      const req = request(app).get(`/${endpoint}?id=${id}`);
       if (secret) req.set('x-api-secret', secret);
       await req.expect(401, { error: 'Unauthorized' });
     }
@@ -101,21 +97,13 @@ describe('Discord 内部 API', () => {
     expect(response.headers['access-control-allow-origin']).toBeUndefined();
   });
 
-  it.each([{ pass: 'test-password', expected: true }, { pass: 'wrong', expected: false }])('参加パスワードを照合する: $expected', async ({ pass, expected }) => {
-    await request(setup().app).post('/checkJoinPass').set('x-api-secret', config.API_SECRET).send({ pass }).expect(200, String(expected));
-  });
-
-  it.each([{}, { pass: 123 }, { pass: null }])('文字列以外のパスワードを拒否する: %j', async (body) => {
-    await request(setup().app).post('/checkJoinPass').set('x-api-secret', config.API_SECRET).send(body).expect(400);
-  });
-
   it.each(['getJoinRole', 'checkAdminRole'])('%s でロールの有無を返す', async (endpoint) => {
     for (const roleIds of [[], ['join', 'admin']]) {
       await request(setup('[Player1]', roleIds).app).get(`/${endpoint}?id=${id}`).set('x-api-secret', config.API_SECRET).expect(200, String(roleIds.length > 0));
     }
   });
 
-  it.each([{ endpoint: 'setJoinRole', role: 'join' }, { endpoint: 'setPhoneRole', role: 'phone' }])('$endpoint はロールがない場合だけ付与する', async ({ endpoint, role }) => {
+  it.each([{ endpoint: 'setPhoneRole', role: 'phone' }])('$endpoint はロールがない場合だけ付与する', async ({ endpoint, role }) => {
     for (const existing of [false, true]) {
       const { app, member } = setup('[Player1]', existing ? [role] : []);
       await request(app).get(`/${endpoint}?id=${id}`).set('x-api-secret', config.API_SECRET).expect(200, { success: true });

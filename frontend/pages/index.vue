@@ -1,92 +1,68 @@
 <script setup lang="ts">
 import { useDisconnectSocket } from '~/composables/useSocket';
+import { joinAuthMessage, loginErrorMessage } from '~/utils/authMessages';
 
-const { user, session, loggedIn } = useUserSession();
+const { session, loggedIn } = useUserSession();
+const loading = ref(false);
+const joinLoad = ref(false);
+const joinAuth = ref(false);
+const authPending = ref(false);
+const authLocked = ref(false);
+const authError = ref('');
+const password = ref('');
+const { gamerTag, isJoining } = useComponents();
+if (session.value?.user) gamerTag.value = session.value.user.gamerTag;
 
-const loading = ref<boolean>(false);
-const joinLoad = ref<boolean>(false);
-const joinAuth = ref<boolean>(false);
-const password = ref<string>();
-let discordId: string | null | undefined;
+const errorMessage = useState<string>('connectionError', () => loginErrorMessage(useRoute().query.error));
+const { emit } = useCusEvent();
 
-const {
-  gamerTag,
-  isJoining,
-  phoneLevel,
-  micLevel
-} = useComponents();
-
-if (session.value?.user) {
-  gamerTag.value = session.value.user.gamerTag
-  discordId = session.value.user.discordId || null;
-}
-
-
-const route = useRoute()
-const error = computed(() => {
-  const error = route.query.error
-  if (error == 'authentication_error') {
-    return 'Discord認証に失敗しました。';
-  } else if (error == 'discrod_nickname_error') {
-    return 'Discordサーバーのニックネーム設定に不備があります。';
-  } else {
-    return '';
-  }
-})
-const errorMessage = ref<string>(error.value);
-
-const loginClick = async () => {
-  await navigateTo('/auth/discord', { external: true });
-}
+const loginClick = () => navigateTo('/auth/discord', { external: true });
 
 const joinAuthClick = async () => {
-  const res = await $fetch('/api/checkJoinPass', {
-    method: 'post',
-    body: { "pass": password.value }
-  });
-
-  if(res) {
-    await $fetch(`/api/setJoinRole?id=${discordId}`);
-    joinAuth.value = res as boolean;
+  authPending.value = true;
+  authError.value = '';
+  try {
+    const result = await $fetch('/api/joinAuth', { method: 'POST', body: { pass: password.value } });
+    joinAuth.value = result.ok;
+    authLocked.value = result.locked;
+    authError.value = joinAuthMessage(result);
+  } catch {
+    authError.value = '参加認証に失敗しました';
+  } finally {
+    authPending.value = false;
   }
-}
+};
 
 const joinClick = async () => {
   joinLoad.value = true;
   errorMessage.value = '';
-
   try {
     await useConnectSkyway(gamerTag.value);
-  } catch (err) {
-    if (err == 'joining_error') {
-      errorMessage.value = '通話に参加できませんでした。時間を空けてもう一度お試しください。'
-    }
-
-    joinLoad.value = false;
+    await useConnectSocket();
+    isJoining.value = true;
+  } catch {
+    emit('exit', 'exit');
+    useDisconnectSocket();
+    errorMessage.value = '接続できませんでした';
     isJoining.value = false;
-
-    return;
+  } finally {
+    joinLoad.value = false;
   }
-
-  errorMessage.value = '';
-
-  await useConnectSocket();
-
-  joinLoad.value = false;
-  isJoining.value = true;
-}
+};
 
 onMounted(async () => {
-  if (loggedIn) {
-    const res: boolean = await $fetch(`/api/getJoinRole?id=${discordId}`);
-    joinAuth.value = res;
+  if (!loggedIn.value) return;
+  try {
+    joinAuth.value = await $fetch('/api/getJoinRole');
     await useAudio();
     await useAudioDevice();
-
     await getIngameSettings();
+  } catch {
+    errorMessage.value = '初期化失敗';
+  } finally {
+    loading.value = false;
   }
-  loading.value = false;
-})
+});
 
 </script>
 
@@ -118,11 +94,11 @@ onMounted(async () => {
                         </v-row>
                         <v-row justify="center" align-content="center" no-gutters>
                           <v-col cols="12">
-                            <p class="text-center mb-5">パスワードを入力してください。</p>
+                            <p class="text-center text-red mb-5" role="alert">{{ authError }}</p>
                           </v-col>
                           <v-col cols="12" class="d-flex justify-center align-center">
-                            <v-text-field v-model="password" type="text" bg-color="white" name="input-10-1" label="パスワードを入力" style="max-width: 300px;" ></v-text-field>
-                            <v-btn @click="joinAuthClick" color="#5865f2" width="80" class="ml-4">送信</v-btn>
+                            <v-text-field v-model="password" :disabled="authLocked || authPending" type="text" bg-color="white" name="input-10-1" label="パスワード" style="max-width: 300px;" ></v-text-field>
+                            <v-btn :disabled="authLocked || authPending" :loading="authPending" @click="joinAuthClick" color="#5865f2" width="80" class="ml-4">送信</v-btn>
                           </v-col>
                         </v-row>
                       </div>

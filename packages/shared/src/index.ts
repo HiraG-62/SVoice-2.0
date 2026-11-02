@@ -1,4 +1,5 @@
 import { z } from 'zod';
+export { encodeMemberName, decodeMemberName } from './memberName';
 
 export const playerDataSchema = z.object({
   name: z.string(),

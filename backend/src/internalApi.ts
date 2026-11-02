@@ -79,12 +79,6 @@ export function createDiscordApp({ config, fetchGuild, nextBot, logger = console
     }
   });
 
-  app.post('/checkJoinPass', (req, res) => {
-    const pass: unknown = req.body?.pass;
-    if (typeof pass !== 'string') { res.status(400).json({ error: 'Invalid password format' }); return; }
-    res.status(200).json(pass === config.JOIN_PASSWORD);
-  });
-
   const updateRole = async (id: string, role: string, operation: 'check' | 'add' | 'remove', disabledResult = false) => {
     if (!config.DISCORD_ENABLED) return operation === 'check' ? disabledResult : { success: true };
     const guild = await fetchGuild();
@@ -105,7 +99,6 @@ export function createDiscordApp({ config, fetchGuild, nextBot, logger = console
       res.status(500).json({ error: 'Internal server error' });
     }
   };
-  app.get('/setJoinRole', roleHandler(config.DISCORD_SERVER_ROLE_ID_JOIN, 'add'));
   app.get('/getJoinRole', roleHandler(config.DISCORD_SERVER_ROLE_ID_JOIN, 'check', true));
   app.get('/checkAdminRole', roleHandler(config.DISCORD_SERVER_ROLE_ID_ADMIN, 'check'));
   app.get('/setPhoneRole', roleHandler(config.DISCORD_SERVER_ROLE_ID_PHONE, 'add'));

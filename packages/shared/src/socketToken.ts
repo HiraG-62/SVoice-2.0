@@ -19,6 +19,7 @@ export function verifySocketToken(token: string, secret: string, now = Date.now(
   const parts = token.split('.');
   if (parts.length !== 2 || !parts.every((part) => BASE64URL_PATTERN.test(part))) return null;
   const [encoded, signature] = parts;
+  if (!encoded || !signature) return null;
   const received = Buffer.from(signature, 'base64url');
   const expected = createHmac('sha256', secret).update(encoded).digest();
   if (received.length !== expected.length || !timingSafeEqual(received, expected)) return null;
