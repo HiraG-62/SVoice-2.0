@@ -1,14 +1,14 @@
+// どれも画面の表示後（onMounted・操作・Socket の受信）に呼ばれるため、useFetch ではなく $fetch を使う
 export async function getIngameSettings() {
   const { ingameSettings } = useComponents();
 
-  const { data, error } = await useFetch('/api/getSetting');
-  ingameSettings.value = data.value;
+  ingameSettings.value = await $fetch('/api/getSetting');
 }
 
 export async function setIngameSettings() {
   const { ingameSettings } = useComponents();
 
-  const { data, error } = await useFetch('/api/setSetting', {
+  await $fetch('/api/setSetting', {
     method: 'POST',
     body: ingameSettings.value
   })
@@ -17,6 +17,5 @@ export async function setIngameSettings() {
 export async function getIngameDefaultSettings() {
   const { ingameSettings } = useComponents();
 
-  const { data, error } = await useFetch('/api/getDefaultSetting');
-  ingameSettings.value = data.value;
+  ingameSettings.value = await $fetch('/api/getDefaultSetting');
 }
