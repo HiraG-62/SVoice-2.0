@@ -47,11 +47,10 @@ Discord OAuth の値はこのモードでは不要。既存の必須設定チェ
 
 ```powershell
 cd E:\dev\SyakasabaVC
-$env:ENV_FILE = 'E:\dev\SyakasabaVC\backend\.env.development'
-$env:FRONTEND_ENV_FILE = 'E:\dev\SyakasabaVC\frontend\.env.development'
-$env:DEV_PLAYERS = 'Alice,Bob'
 pnpm dev
 ```
+
+`backend\.env.development` と `frontend\.env.development` があれば自動で使う。ないほうは本番用の `.env` を読み、その旨を警告として表示する（ポートも本番の値になる）。別のファイルを使うときは `$env:ENV_FILE`（backend）と `$env:FRONTEND_ENV_FILE`（frontend）にフルパスを設定する。プレイヤー名を変えるときは `$env:DEV_PLAYERS = 'Alice,Bob,Carol'`。
 
 backend・frontend・偽ゲームサーバーが名前と色付きのログで起動する。`DEV_PLAYERS` は偽ゲームサーバーのタグと開発用ログインのプリセットに共通で使われる（既定 `Alice,Bob`）。`sweep` で距離 0〜40 を往復する。1 つが異常終了しても残りは動き、Ctrl+C でまとめて止まる。
 
