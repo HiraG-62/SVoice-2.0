@@ -16,7 +16,7 @@
 - **pnpm workspace**（ルートの `pnpm-lock.yaml`）。Node 24（`.node-version`）。npm は使わない。
 - 検証はルートで `pnpm test` / `pnpm typecheck` / `pnpm build`（各パッケージの同名スクリプトを再帰実行）。
   - frontend の `typecheck` は `nuxi typecheck`（vue-router の Volar プラグインの解決失敗の警告が出るが、結果には影響しない）。frontend の `build` / `typecheck` は `frontend/.env` を読み込むので、値を出力しない
-- backend は `backend/` を基準に `.env`・`env/tokens.json`（実際の Bot トークン）・`key/` を読む（cwd には依存しない）。**検証で backend を起動するときは、`ENV_FILE` にリポジトリ外のダミーの `.env` を指定し、`DISCORD_ENABLED=false` にする**
+- backend は `backend/` を基準に `.env`・`env/tokens.json`（実際の Bot トークン）・`key/` を読む（cwd には依存しない）。動作確認は、ルートの `pnpm dev`（`backend/.env.development`・`frontend/.env.development` を自動で使う）でそのまま起動して行う（下の「制約」を参照）
 - ローカルでの手動確認手順は `docs/MANUAL_TEST.md`。ゲームサーバーの代わりに `pnpm --filter @svoice/backend fake-game <タグ...>`（`--scenario` / `--replay` あり）を使う。
 
 ## 制約
