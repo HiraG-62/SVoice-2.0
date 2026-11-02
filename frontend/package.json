@@ -11,34 +11,22 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "@discordjs/voice": "^0.17.0",
     "@mdi/font": "^7.4.47",
-    "@nuxt/image": "^1.8.0",
-    "@nuxt/kit": "^3.13.2",
-    "@nuxt/types": "^2.18.1",
-    "@nuxtjs/auth-next": "5.0.0-1667386184.dfbbb54",
-    "@skyway-sdk/room": "^1.9.2",
+    "@nuxt/image": "^2.2.1",
+    "@nuxt/kit": "^4.6.3",
+    "@skyway-sdk/room": "^2.5.1",
     "@timephy/rnnoise-wasm": "^1.0.0",
-    "@types/express": "^4.17.21",
-    "axios": "^1.7.7",
-    "bedrock-protocol": "^3.40.0",
-    "discord.js": "^14.16.3",
-    "express": "^4.21.1",
-    "express-session": "^1.18.1",
     "mitt": "^3.0.1",
-    "nuxt": "^3.13.0",
-    "nuxt-auth-utils": "^0.5.0",
-    "sass": "^1.79.3",
-    "skyway": "^2.1.0",
-    "skyway-js": "^4.4.5",
-    "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.1",
-    "vue": "latest",
-    "vue-router": "latest",
-    "vuetify": "^3.7.0-beta.1"
+    "nuxt": "^4.6.3",
+    "nuxt-auth-utils": "^0.6.0",
+    "sass": "^1.107.1",
+    "socket.io-client": "^4.8.4",
+    "vue": "^3.5.44",
+    "vue-router": "^4.6.4",
+    "vuetify": "^4.3.1"
   },
-  "devDependencies": {
-    "@types/express-session": "^1.18.0",
-    "@types/socket.io-client": "^3.0.0"
+  "overrides": {
+    "glob": "^14.0.3",
+    "minimatch": "^11.0.4"
   }
 }
