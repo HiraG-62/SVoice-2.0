@@ -1,6 +1,6 @@
 # voice-subscription-sync: 購読状態を SkyWay の実際の状態と同期する
 
-> 状態: **保留**（2026-11-03。現状整理を優先するため、実装は取り消した）
+> 状態: **取り込み済み**（2026-11-03。`phase3-voice-rewrite` で `frontend/services/subscription.ts` として実装した）
 
 ## 背景
 

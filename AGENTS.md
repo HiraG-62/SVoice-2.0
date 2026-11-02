@@ -6,7 +6,8 @@
 本番・開発とも Windows 機で動かす。
 
 ## リポジトリ構成
-- `frontend/`: Nuxt 4 アプリ（UI、音声処理 `composables/`、Nuxt server API `server/`、距離設定 `settings/`）
+- `frontend/`: Nuxt 4 アプリ。状態は Pinia（`stores/`）、音声の実体は `services/`（`mic`・`voiceRoom`・`subscription`・`volume`・`diagnostics`）、参加と退出の流れは `composables/useVoice.ts`、Nuxt server API は `server/`、距離設定の初期値は `settings/`
+- `e2e/`: Playwright の E2E（実際の SkyWay と合成音声で 2 人の通話を確かめる）
 - `backend/`: Node.js + TypeScript（`src/`）。`gameReceiver.ts`（プレイヤーデータ受信 :30000）、`socketServer.ts`（Socket.IO :3001）、`discordBot.ts`（Bot・内部 API :5000/:1234）、`config.ts`（環境変数）、エントリ `index.ts`。tsup で `dist/index.cjs` にビルドする
 - `packages/shared/`: `@svoice/shared`。frontend と backend で共有する型（`PlayerData`、`IngameSettings`、Socket.IO のイベント型）と zod スキーマ
 - `tools/`: workspace 外の単体スクリプト（`capture-player-data.mjs`: Minecraft からの生データの取得）
@@ -14,7 +15,8 @@
 
 ## コマンド
 - **pnpm workspace**（ルートの `pnpm-lock.yaml`）。Node 24（`.node-version`）。npm は使わない。
-- 検証はルートで `pnpm test` / `pnpm typecheck` / `pnpm build`（各パッケージの同名スクリプトを再帰実行）。
+- 検証はルートで `pnpm test` / `pnpm typecheck` / `pnpm build`（各パッケージの同名スクリプトを再帰実行）。音声・接続に触れたら `pnpm dev:e2e` を起動して `pnpm e2e` も通す（`pnpm dev` の偽ゲームサーバーと同時に動かさない）
+- 音量計算と受信判定（`frontend/services/volume.ts`）の固定テストの期待値は、I1 に関わるため変えない
   - frontend の `typecheck` は `nuxi typecheck`（vue-router の Volar プラグインの解決失敗の警告が出るが、結果には影響しない）。frontend の `build` / `typecheck` は `frontend/.env` を読み込むので、値を出力しない
 - backend は `backend/` を基準に `.env`・`env/tokens.json`（実際の Bot トークン）・`key/` を読む（cwd には依存しない）。動作確認は、ルートの `pnpm dev`（`backend/.env.development`・`frontend/.env.development` を自動で使う）でそのまま起動して行う（下の「制約」を参照）
 - ローカルでの手動確認手順は `docs/MANUAL_TEST.md`。ゲームサーバーの代わりに `pnpm --filter @svoice/backend fake-game <タグ...>`（`--scenario` / `--replay` あり）を使う。
