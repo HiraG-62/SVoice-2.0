@@ -29,21 +29,10 @@ backend の起動は `backend/src/index.ts` が設定（`config.ts`）を読み�
 - `POST /` でプレイヤー配列を受け取り、`data` に保存する。
 - 送信元 IP を `GAME_ALLOWED_IPS`（既定は同じ機械のみ）で制限する。許可外は 403 で、1 分に 1 回 `受信拒否: <IP>` をログに出す。
 - `GAME_API_SECRET` が設定されていれば `x-api-secret` を照合する（BE 側は送れないため、本番では未設定の想定）。
-- 形式の検証: 配列、500 人まで、`name` は空でない文字列、ほかのフィールドは有限の数値・真偽値・数値として読める文字列のどれか。値は変換しない（実データのサンプル待ち。Q14）。
+- 形式の検証: 配列、500 人まで。プレイヤーごとに `playerDataSchema`（新しい入れ子の形式）で検証し、不正なプレイヤー（古い平らな形式を含む）はその人だけを取り除く（理由ごとに 1 分に 1 回ログ）。値は変換しない。
 - 正しいデータを最後に受け取ってから 5 秒で `data = null`（ゲームサーバー停止の検知）。
 
-プレイヤーデータ（`@svoice/shared` の `PlayerData`）:
-
-| フィールド | 意味 |
-|---|---|
-| `name` | ゲーマータグ（= Discord ニックネームの `[...]` 部分） |
-| `dimension`, `x`, `y`, `z` | ディメンションと座標 |
-| `telephone` | 通話中の番号（0 = 通話なし） |
-| `hasTelephone` | スマホ所持（Discord の PHONE ロールに同期） |
-| `useMegaphone`, `useMicrophone` | メガホン／マイク使用中 |
-| `transceiverType`, `transceiverNumber` | トランシーバー（type 1 = 送信側、number 0 = 未使用） |
-| `mute` | ゲーム側からのミュート指示（1 = トグル, 2 = ミュート, 3 = 解除） |
-| `voiceRangeOutput`, `volumeOutput`, `voiceRangeInput`, `volumeInput` | 声の届く範囲・音量の倍率（%） |
+プレイヤーデータ（`@svoice/shared` の `PlayerData`）は、2026-11 の Minecraft 側の更新後の入れ子の形式（`location.{server,dimension,coordinates}`、`transceiver`・`radio` の `{type,number}`、`music`、`voiceOptions` など）。項目の一覧と意味は `docs/VOICE_RULES.md` の「入力」。
 
 ### `src/socketServer.ts`（ポート 3001、development は http、それ以外は https）
 - **接続時の認証**: `handshake.auth.token` を `verifySocketToken`（HMAC-SHA256、秘密鍵は `API_SECRET`、有効期限 60 秒）で検証する。失敗は `unauthorized` で拒否。トークンの `{ gamerTag, discordId, admin }` を `socket.data` に入れる。
@@ -100,16 +89,8 @@ backend の起動は `backend/src/index.ts` が設定（`config.ts`）を読み�
 - `composables/useVoice.ts`: 参加・退出の流れ、Socket の受信の振り分け、ゲームからのミュート指示（効果音あり）、スマホ所持によるロールの付け外し。全体発言・設定・音量の変更は次のデータを待たずに反映する。空の配列を受け取ったら待機中にし、全体発言者だけを受信する。
 - SkyWay のメンバー名: `@svoice/shared` の `encodeMemberName`（英数字・`.`・`-` 以外を `_` ＋ 6 桁の 16 進数に置き換える可逆な変換）。
 
-### 距離音量の計算（`services/volume.ts` の `calcPlayerVolume`）
-相手ごとに次の順で判定する（今の動作で意図どおり。Q6）。
-1. 双方とも通話していない → 係数 1。同じ番号で通話中 → **1 で確定**。片方だけ通話中 → 係数 = `general.callingVolume`。
-2. 双方がトランシーバーを持ち、相手が送信側で番号が一致し、自分の type が 0 か 1 → **1 で確定**。
-3. ディメンションが違う → 0。
-4. 相手がマイク使用中なら `microphone`、メガホンなら `megaphone` の設定（係数・min・max）を使う。それ以外は `general` の min・max を使う。マイクやメガホンの係数は手順 1 の通話係数を上書きする。
-5. `range = 相手voiceRangeOutput% × 自分voiceRangeInput%`。min と max に range を掛ける。`volume = 相手volumeOutput% × 自分volumeInput%`。
-6. 距離 ≤ min → 1、距離 ≥ max → `general.minVolume`、その間は線形に減衰する。最終値は `距離音量 × 係数 × volume`。
-
-受信の判定: 全体発言者、または「自分がゲーム内にいて距離音量が 0 より大きい」相手だけを受信する。
+### 聞こえる条件（`services/volume.ts`）
+全体発言・ゲーム外・サーバー・音楽・電話・トランシーバー・ラジオ・ディメンション・距離の順に判定する。**正は `docs/VOICE_RULES.md`**（2026-11-04 にユーザーと確定）。受信は「結果が 0 より大きい、または全体発言」の相手だけ。
 
 ### 設定ファイル
 - `<NUXT_DATA_DIR>/setting.json`（既定 `frontend/data/setting.json`、git 管理外）: 現在の距離設定。管理者が `/api/setSetting` で上書きする（スキーマと値の範囲で検証）。相対パスは frontend の起動時の cwd から解決する。ファイルがなければ起動時に旧 `settings/setting.json`（なければ `default.json`）からコピーする。
