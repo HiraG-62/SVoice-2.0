@@ -1,86 +1,69 @@
 import type { IngameSettings, PlayerData } from '@svoice/shared';
 import { PERCENT } from './constants';
 
-export const getDistance = (selfData: PlayerData, players: PlayerData[]) => {
+const DEVICE_RECEIVE = 0;
+const DEVICE_SEND = 1;
+const MUSIC_MUTE = 2;
+const MUSIC_ON = 1;
+const OTHER_DIMENSION = -1;
+const MIN_TRANSCEIVER_CHANNEL = 1;
+
+export type VolumeReason = 'admin' | 'offGame' | 'server' | 'music' | 'phone' | 'transceiver' | 'radio' | 'dimension' | 'distance' | 'settingsMissing';
+export interface VolumeDecision { volume: number; reason: VolumeReason }
+
+export function getDistance(selfData: PlayerData, players: PlayerData[]) {
   const distanceMap = new Map<string, number>();
-
-  players.forEach((data) => {
-    if (!selfData || data.name == selfData.name) return;
-
-    const distance = Math.sqrt(Math.pow((selfData.x - data.x), 2) + Math.pow((selfData.y - data.y), 2) + Math.pow((selfData.z - data.z), 2));
-    distanceMap.set(data.name, distance);
-  })
-
+  const self = selfData.location.coordinates;
+  for (const player of players) {
+    if (player.name === selfData.name) continue;
+    const other = player.location.coordinates;
+    distanceMap.set(player.name, Math.sqrt((self.x - other.x) ** 2 + (self.y - other.y) ** 2 + (self.z - other.z) ** 2));
+  }
   return distanceMap;
 }
 
-export const calcPlayerVolume = (selfData: PlayerData, distanceData: Map<string, number>, players: PlayerData[], option: IngameSettings) => {
+function distanceVolume(self: PlayerData, other: PlayerData, distance: number, settings: IngameSettings) {
+  const device = other.useMicrophone ? settings.microphone : other.useMegaphone ? settings.megaphone : undefined;
+  const coefficient = device ? device.value.volumeGain.value
+    : self.telephone === 0 && other.telephone === 0 ? 1 : settings.general.value.callingVolume.value;
+  const limits = device?.value ?? settings.general.value;
+  const range = (other.voiceOptions.rangeOutput / PERCENT) * (self.voiceOptions.rangeInput / PERCENT);
+  const volume = (other.voiceOptions.volumeOutput / PERCENT) * (self.voiceOptions.volumeInput / PERCENT);
+  const min = limits.minDistance.value * range;
+  const max = limits.maxDistance.value * range;
+  const attenuation = distance <= min ? 1 : distance >= max ? settings.general.value.minVolume.value
+    : 1 - (distance - min) / (max - min);
+  return attenuation * coefficient * volume;
+}
 
-  const playerVolume = new Map<string, number>();
+export function evaluatePlayerVolume(
+  self: PlayerData | undefined, other: PlayerData | undefined, distance: number,
+  settings: IngameSettings | null, admin = false,
+): VolumeDecision {
+  if (admin) return { volume: 1, reason: 'admin' };
+  if (!self || !other) return { volume: 0, reason: 'offGame' };
+  if (self.location.server !== other.location.server) return { volume: 0, reason: 'server' };
+  if (self.music === MUSIC_MUTE && other.music === MUSIC_ON) return { volume: 0, reason: 'music' };
+  if (self.telephone !== 0 && other.telephone !== 0 && self.telephone === other.telephone) return { volume: 1, reason: 'phone' };
+  if (other.transceiver.type === DEVICE_SEND &&
+    (self.transceiver.type === DEVICE_RECEIVE || self.transceiver.type === DEVICE_SEND) &&
+    self.transceiver.number >= MIN_TRANSCEIVER_CHANNEL && other.transceiver.number >= MIN_TRANSCEIVER_CHANNEL &&
+    self.transceiver.number === other.transceiver.number) return { volume: 1, reason: 'transceiver' };
+  if (other.radio.type === DEVICE_SEND && self.radio.type === DEVICE_RECEIVE &&
+    self.radio.number === other.radio.number) return { volume: 1, reason: 'radio' };
+  if (self.location.dimension !== other.location.dimension ||
+    self.location.dimension === OTHER_DIMENSION || other.location.dimension === OTHER_DIMENSION) return { volume: 0, reason: 'dimension' };
+  if (!settings) return { volume: 0, reason: 'settingsMissing' };
+  return { volume: distanceVolume(self, other, distance, settings), reason: 'distance' };
+}
 
-  let min: number;
-  let max: number;
-  let coef = 1;
-  let range = 1;
-  let volume = 1;
-  let distanceVolume = 0;
-
-  const calc = (oppName: string) => {
-    const oppData = players.find(player => player.name == oppName)!;
-    const oppDistance = distanceData.get(oppName)!;
-
-    if (oppData == undefined || selfData == undefined) return 0;
-
-    if (selfData.telephone + oppData.telephone == 0) coef = 1;
-    else if ((selfData.telephone == oppData.telephone)) return 1;
-    else if ((selfData.telephone != oppData.telephone)) coef = option.general.value.callingVolume.value;
-
-    if (selfData.transceiverNumber >= 1 && oppData.transceiverNumber >= 1) {
-      if (oppData.transceiverType === 1 && oppData.transceiverNumber == selfData.transceiverNumber &&
-        (selfData.transceiverType === 0 || selfData.transceiverType === 1)) {
-        return 1;
-      }
-    }
-
-    if (selfData.dimension != oppData.dimension) return 0;
-
-    if (oppData.useMicrophone) {
-      coef = option.microphone.value.volumeGain.value;
-      min = option.microphone.value.minDistance.value;
-      max = option.microphone.value.maxDistance.value;
-    } else if (oppData.useMegaphone) {
-      coef = option.megaphone.value.volumeGain.value;
-      min = option.megaphone.value.minDistance.value;
-      max = option.megaphone.value.maxDistance.value;
-    } else {
-      min = option.general.value.minDistance.value;
-      max = option.general.value.maxDistance.value;
-    }
-
-    range = (oppData.voiceRangeOutput / PERCENT) * (selfData.voiceRangeInput / PERCENT);
-    volume = (oppData.volumeOutput / PERCENT) * (selfData.volumeInput / PERCENT);
-
-    max *= range;
-    min *= range;
-
-    if (oppDistance <= min) distanceVolume = 1;
-    else if (oppDistance >= max) distanceVolume = option.general.value.minVolume.value;
-    else distanceVolume = (1 - (oppDistance - min) / (max - min));
-
-    return distanceVolume * coef * volume;
+export function calcPlayerVolume(self: PlayerData, distances: Map<string, number>, players: PlayerData[], settings: IngameSettings) {
+  const volumes = new Map<string, number>();
+  for (const player of players) {
+    if (player.name === self?.name) continue;
+    volumes.set(player.name, evaluatePlayerVolume(self, player, distances.get(player.name)!, settings).volume);
   }
-
-  players.forEach(player => {
-    if (selfData == undefined) {
-      playerVolume.set(player.name, 0);
-      return;
-    }
-    if (player.name == selfData.name) return;
-
-    playerVolume.set(player.name, calc(player.name));
-  })
-
-  return playerVolume;
+  return volumes;
 }
 
 export function shouldSubscribe(inGame: boolean, speaker: boolean, volume: number) {

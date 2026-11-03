@@ -53,15 +53,36 @@ export function resolveFakeGameEndpoint(env: NodeJS.ProcessEnv) {
 
 export function createPlayer(name: string): PlayerData {
   return {
-    name, dimension: 0, x: 0, y: 64, z: 0,
+    name, location: { server: 1, dimension: 0, coordinates: { x: 0, y: 64, z: 0 } },
     telephone: 0, hasTelephone: 0, useMegaphone: 0, useMicrophone: 0,
-    transceiverType: 0, transceiverNumber: 0, mute: 0,
-    voiceRangeOutput: 100, volumeOutput: 100, voiceRangeInput: 100, volumeInput: 100,
+    transceiver: { type: 0, number: 0 }, radio: { type: 2, number: 0 }, music: 0, mute: 0,
+    voiceOptions: { rangeOutput: 100, volumeOutput: 100, rangeInput: 100, volumeInput: 100 },
   };
 }
 
 export function placeAtDistance(players: PlayerData[], distance: number) {
-  return players.map((player, index) => ({ ...player, x: index === 0 ? 0 : distance }));
+  return players.map((player, index) => ({ ...player, location: { ...player.location,
+    coordinates: { ...player.location.coordinates, x: index === 0 ? 0 : distance } } }));
+}
+
+export const NUMERIC_PLAYER_FIELDS = [
+  'location.server', 'location.dimension', 'location.coordinates.x', 'location.coordinates.y', 'location.coordinates.z',
+  'telephone', 'hasTelephone', 'useMegaphone', 'useMicrophone', 'mute', 'music',
+  'transceiver.type', 'transceiver.number', 'radio.type', 'radio.number',
+  'voiceOptions.rangeOutput', 'voiceOptions.volumeOutput', 'voiceOptions.rangeInput', 'voiceOptions.volumeInput',
+] as const;
+
+export function setPlayerField(player: PlayerData, field: string, value: number) {
+  if (!Number.isFinite(value) || !NUMERIC_PLAYER_FIELDS.some(candidate => candidate === field)) return false;
+  const path = field.split('.');
+  let record: Record<string, unknown> = player;
+  for (const key of path.slice(0, -1)) {
+    const child = record[key];
+    if (!isRecord(child)) return false;
+    record = child;
+  }
+  record[path.at(-1)!] = value;
+  return true;
 }
 
 export function sweepDistance(elapsedMs: number, seconds = DEFAULT_SWEEP_SECONDS) {
@@ -81,7 +102,8 @@ export function advanceScenario(state: ReturnType<typeof createScenarioState>, s
     seed = (Math.imul(seed, RANDOM_MULTIPLIER) + RANDOM_INCREMENT) >>> 0;
     return Math.max(-SWEEP_MAX_DISTANCE, Math.min(SWEEP_MAX_DISTANCE, position + (seed / RANDOM_MODULUS * 2 - 1) * WALK_STEP));
   };
-  const players = state.players.map((player) => ({ ...player, x: step(player.x), z: step(player.z) }));
+  const players = state.players.map((player) => ({ ...player, location: { ...player.location,
+    coordinates: { ...player.location.coordinates, x: step(player.location.coordinates.x), z: step(player.location.coordinates.z) } } }));
   return { players, seed };
 }
 

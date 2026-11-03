@@ -1,5 +1,5 @@
 import express, { type ErrorRequestHandler } from 'express';
-import { PLAYER_DATA_FIELDS, type PlayerData } from '@svoice/shared';
+import { playerDataSchema, type PlayerData } from '@svoice/shared';
 import { createThrottledLog, DEFAULT_ALLOWED_IPS, restrictIps } from './ipAccess';
 
 export const GAME_RECEIVER_PORT = 30000;
@@ -9,24 +9,17 @@ export const MAX_PLAYERS = 500;
 function validationError(body: unknown): string | null {
   if (!Array.isArray(body)) return '配列が必要';
   if (body.length > MAX_PLAYERS) return '人数超過';
-  for (const player of body) {
-    if (typeof player !== 'object' || player === null || Array.isArray(player)) return 'プレイヤー形式不正';
-    const record = player as Record<string, unknown>;
-    if (typeof record.name !== 'string' || record.name.length === 0) return 'name が不正';
-    for (const field of PLAYER_DATA_FIELDS) {
-      if (field === 'name') continue;
-      const value = record[field];
-      if (typeof value === 'boolean') continue;
-      if (typeof value === 'number' && Number.isFinite(value)) continue;
-      if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) continue;
-      return `${field} が不正`;
-    }
-  }
   return null;
 }
 
 export function validatePlayerData(body: unknown): body is PlayerData[] {
-  return validationError(body) === null;
+  return validationError(body) === null && (body as unknown[]).every(player => playerDataSchema.safeParse(player).success);
+}
+
+function invalidPlayerReason(player: unknown, path: readonly PropertyKey[]) {
+  if (typeof player === 'object' && player !== null && !Array.isArray(player) &&
+    !('location' in player) && ('dimension' in player || 'x' in player)) return '旧形式';
+  return path.length ? `${path.join('.')} が不正` : 'プレイヤー形式不正';
 }
 
 export function createGameReceiver({ gameApiSecret, allowedIps = DEFAULT_ALLOWED_IPS, logger = console, now = Date.now }: {
@@ -62,7 +55,15 @@ export function createGameReceiver({ gameApiSecret, allowedIps = DEFAULT_ALLOWED
       res.status(400).json({ error: 'Invalid player data format' });
       return;
     }
-    data = req.body;
+    data = (req.body as unknown[]).filter((player): player is PlayerData => {
+      const result = playerDataSchema.safeParse(player);
+      if (result.success) return true;
+      for (const issue of result.error.issues) {
+        const reason = invalidPlayerReason(player, issue.path);
+        log(`player:${reason}`, `プレイヤーデータ除外: ${reason}`);
+      }
+      return false;
+    });
     resetIdleTimer();
     res.status(200).json({ success: true });
   });

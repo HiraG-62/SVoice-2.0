@@ -76,17 +76,55 @@ test('参加・距離・通話・ディメンション・メガホン・ミュ�
       if (!gain) await expect.poll(async () => (await snapshot(alice)).nearby).toEqual([]);
       else await expect.poll(async () => ((await snapshot(alice)).nearby as {currentGain:number}[])?.[0]?.currentGain).toBeCloseTo(gain!, 5);
     }
-    players = players.map(p => ({ ...p, telephone: 1, x: p.name === bobTag ? 100 : 0 }));
+    players = placeAtDistance(players.map(p => ({ ...p, telephone: 1 })), 100);
     await expect.poll(async () => ((await snapshot(alice)).nearby as {currentGain:number}[])?.[0]?.currentGain).toBe(2);
-    players = players.map(p => ({ ...p, telephone: 0, x: 0, dimension: p.name === bobTag ? 1 : 0 }));
+    players = placeAtDistance(players.map(p => ({ ...p, telephone: 0,
+      location: { ...p.location, dimension: p.name === bobTag ? 1 : 0 } })), 0);
     await expect.poll(async () => (await snapshot(alice)).nearby).toEqual([]);
-    players[1] = { ...players[1]!, dimension: 0, x: 25, useMegaphone: 1 };
+    players = placeAtDistance(players, 25);
+    players[1]!.location.dimension = 0;
+    players[1]!.useMegaphone = 1;
     await expect.poll(async () => ((await snapshot(alice)).nearby as {currentGain:number}[])?.[0]?.currentGain).toBeCloseTo(2.2 * 5 / 22.5, 5);
+
+    players = [createPlayer(aliceTag), createPlayer(bobTag)];
+    players[1]!.location.server = 2;
+    await expect.poll(async () => (await diagnostic(alice)).peers[0]?.reason).toBe('server');
+    await expect.poll(async () => (await snapshot(alice)).nearby).toEqual([]);
+    players[1]!.location.server = 1;
+    players[1]!.music = 2;
+    players[0]!.music = 1;
+    await expect.poll(async () => (await diagnostic(bob)).peers[0]?.reason).toBe('music');
+    await expect.poll(async () => (await snapshot(bob)).nearby).toEqual([]);
+    await alice.locator('.mdi-bullhorn').click();
+    await expect.poll(async () => (await diagnostic(bob)).peers[0]?.reason).toBe('admin');
+    await expect.poll(async () => (await snapshot(bob)).nearby[0]?.currentGain).toBe(2);
+    await alice.locator('.mdi-bullhorn').click();
+    await expect.poll(async () => (await snapshot(bob)).nearby).toEqual([]);
+
+    players = placeAtDistance([createPlayer(aliceTag), createPlayer(bobTag)], 1000);
+    players[0]!.radio = { type: 0, number: 5 };
+    players[1]!.radio = { type: 1, number: 5 };
+    players[1]!.location.dimension = 1;
+    await expect.poll(async () => (await diagnostic(alice)).peers[0]?.reason).toBe('radio');
+    await expect.poll(async () => (await snapshot(alice)).nearby[0]?.currentGain).toBe(2);
+    await expect.poll(async () => (await snapshot(bob)).nearby).toEqual([]);
+    players[0]!.radio.type = 1;
+    await expect.poll(async () => (await snapshot(alice)).nearby).toEqual([]);
+    players[1]!.radio.type = 0;
+    await expect.poll(async () => (await snapshot(bob)).nearby[0]?.currentGain).toBe(2);
+    await expect.poll(async () => (await snapshot(alice)).nearby).toEqual([]);
+
+    players = [createPlayer(aliceTag), createPlayer(bobTag)];
+    players[0]!.location.dimension = -1;
+    players[1]!.location.dimension = -1;
+    await expect.poll(async () => (await diagnostic(alice)).peers[0]?.reason).toBe('dimension');
+    await expect.poll(async () => (await snapshot(alice)).nearby).toEqual([]);
+    await expect.poll(async () => (await snapshot(bob)).nearby).toEqual([]);
     players[0]!.mute = 2;
     await expect.poll(async () => (await snapshot(alice)).muted).toBe(true);
     players[0]!.mute = 3;
     await expect.poll(async () => (await snapshot(alice)).muted).toBe(false);
-    players = [createPlayer(aliceTag), { ...createPlayer(bobTag), x: 3 }];
+    players = placeAtDistance([createPlayer(aliceTag), createPlayer(bobTag)], 3);
     await bob.locator('.mdi-waveform').click();
     await expect.poll(async () => (await snapshot(alice)).nearby[0]?.voice).toBe(true);
     await bob.locator('.mdi-waveform').click();

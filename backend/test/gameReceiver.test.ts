@@ -38,15 +38,45 @@ describe('gameReceiver', () => {
     expect(receiver.getData()).toBeUndefined();
   });
 
-  it.each([true, false, '1', '-1.5', '1e2', 0, 0.5])('有限数・真偽値・数値文字列を変換せず受け取る: %s', async (value) => {
+  it.each([0, -1.5, 1e2])('有限数を変換せず受け取る: %s', async (value) => {
     const receiver = createReceiver();
-    const players = [{ ...player, x: value }];
+    const players = [{ ...player, location: { ...player.location, coordinates: { ...player.location.coordinates, x: value } }, extra: 'unchanged' }];
     await request(receiver.app).post('/').send(players).expect(200);
     expect(receiver.getData()).toEqual(players);
   });
 
-  it.each([{}, [], null, '', ' ', 'NaN', 'Infinity', Number.NaN, Infinity])('不正なフィールド値を拒否する: %j', (value) => {
-    expect(validatePlayerData([{ ...player, x: value }])).toBe(false);
+  it.each([{}, [], null, '', ' ', 'NaN', 'Infinity', true, '1', Number.NaN, Infinity])('不正なフィールド値を拒否する: %j', (value) => {
+    expect(validatePlayerData([{ ...player, music: value }])).toBe(false);
+  });
+
+  it('旧形式と不正なプレイヤーだけを取り除く', async () => {
+    const receiver = createReceiver();
+    const { location, ...rest } = player;
+    const legacy = { ...rest, ...location.coordinates, dimension: location.dimension };
+    await request(receiver.app).post('/').send([legacy, player, { ...player, music: '1' }, null]).expect(200);
+    expect(receiver.getData()).toEqual([player]);
+  });
+
+  it('全員不正でも空配列として受け付ける', async () => {
+    const receiver = createReceiver();
+    await request(receiver.app).post('/').send([{}, { ...player, name: '' }]).expect(200);
+    expect(receiver.getData()).toEqual([]);
+  });
+
+  it('名前を出さず理由ごとに 1 分に 1 回ログを出す', async () => {
+    let now = 0;
+    const log = vi.fn();
+    const receiver = createGameReceiver({ logger: { log }, now: () => now });
+    receivers.push(receiver);
+    const invalid = [{ name: 'PrivateName', x: 1, dimension: 0 }, { ...player, music: '1' }];
+    for (let i = 0; i < 2; i++) await request(receiver.app).post('/').send(invalid).expect(200);
+    expect(log).toHaveBeenCalledTimes(2);
+    expect(log.mock.calls.flat().join(' ')).toContain('旧形式');
+    expect(log.mock.calls.flat().join(' ')).not.toContain('PrivateName');
+    expect(log.mock.calls.flat().join(' ')).not.toContain(player.name);
+    now = 60_000;
+    await request(receiver.app).post('/').send(invalid).expect(200);
+    expect(log).toHaveBeenCalledTimes(4);
   });
 
   it('500 人まで受け付ける', () => {
@@ -66,7 +96,7 @@ describe('gameReceiver', () => {
     expect(log).toHaveBeenCalledTimes(2);
     const invalid = createGameReceiver({ logger: { log }, now: () => now });
     receivers.push(invalid);
-    for (let i = 0; i < 2; i++) await request(invalid.app).post('/').send([{}]).expect(400);
+    for (let i = 0; i < 2; i++) await request(invalid.app).post('/').send({ invalid: true }).expect(400);
     expect(log).toHaveBeenCalledTimes(3);
   });
 
@@ -92,7 +122,7 @@ describe('gameReceiver', () => {
     expect(receiver.getData()).toEqual(players);
   });
 
-  it.each([{}, 'not an array', null, 123, [{ name: 'Player1' }], [{ ...player, name: '' }], [null]])('形式違いで 400: %j', async (body) => {
+  it.each([{}, 'not an array', null, 123, Array.from({ length: 501 }, () => player)])('形式違いで 400: %j', async (body) => {
     const receiver = createReceiver();
     await request(receiver.app).post('/').set('Content-Type', 'application/json').send(JSON.stringify(body)).expect(400);
   });

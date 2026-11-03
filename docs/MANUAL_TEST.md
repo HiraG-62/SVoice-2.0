@@ -69,6 +69,8 @@ pnpm --filter @svoice/backend fake-game Alice Bob
 
 最後のコマンドが対話モード。`d <距離>`、`sweep`、`set <番号|all> <項目> <値>`、`stop` / `start`、`show`、`help` が使える。#0 が Alice、#1 が Bob。対話モードと一括起動の偽ゲームサーバーを同時に動かさない。
 
+`set` の入れ子はドット区切り（`location.server`、`location.dimension`、`location.coordinates.x`、`transceiver.type` / `.number`、`radio.type` / `.number`、`voiceOptions.rangeOutput` / `.volumeOutput` / `.rangeInput` / `.volumeInput`）。`music`、`mute`、`telephone`、`hasTelephone`、`useMegaphone`、`useMicrophone` は最上位のまま。旧形式の項目名は使えない。
+
 シナリオ・記録の再生（各行を単独で実行）:
 
 ```powershell
@@ -78,7 +80,7 @@ pnpm --filter @svoice/backend fake-game --scenario walk --seed 42 Alice Bob
 pnpm --filter @svoice/backend fake-game --replay 'E:\captures\capture.jsonl' --rename '記録のタグ1=Alice' --rename '記録のタグ2=Bob'
 ```
 
-`static` は同じ地点、`walk` は seed で再現できるランダム移動。`--replay` は `E:\dev\SyakasabaVC\tools\capture-player-data.mjs` の `.jsonl` を受信時刻の間隔で繰り返す。`--scenario` / `--replay` は標準入力を読まない。
+`static` は同じ地点、`walk` は seed で再現できるランダム移動。`--replay` は `E:\dev\SyakasabaVC\tools\capture-player-data.mjs` の `.jsonl` を受信時刻の間隔で繰り返す。記録は新形式のプレイヤー配列を含むものを使う。旧形式のプレイヤーは backend で除外される。`--scenario` / `--replay` は標準入力を読まない。
 
 ## 実際の Discord を使うモード
 
@@ -142,8 +144,12 @@ pnpm --filter @svoice/backend debug-log --tag Alice --date 2026-11-03
 - [ ] `d 25`: 聞こえなくなり、「近くのプレイヤー」から消える
 - [ ] `sweep`: 音量が滑らかに変わり、一覧への出入りが繰り返される
 - [ ] `set 1 useMegaphone 1` → `d 25`: 聞こえる。`set 1 useMegaphone 0` で戻す
-- [ ] `set 1 dimension 1` → `d 3`: 聞こえない。`set 1 dimension 0` で戻す
+- [ ] `set 1 location.dimension 1` → `d 3`: 聞こえない。`set 1 location.dimension 0` で戻す
 - [ ] `set all telephone 1` → `d 100`: 通話中なので聞こえる。`set all telephone 0` で戻す
+- [ ] `set 1 location.server 2` → `d 0`: 聞こえない。同じ電話番号でも聞こえず、全体発言は聞こえる。`set all telephone 0` と `set 1 location.server 1` で戻す
+- [ ] `set 0 music 2` と `set 1 music 1`: Alice には Bob の声が聞こえない。Bob の全体発言は聞こえる。`set all music 0` で戻す
+- [ ] `set all radio.number 5`、`set 0 radio.type 0`、`set 1 radio.type 1` → `d 1000`: Alice にだけ Bob の声が聞こえる。両者を type 1 にすると聞こえない。`set all radio.type 2` で戻す
+- [ ] `set all location.dimension -1` → `d 0`: 両者とも聞こえない。`set all location.dimension 0` で戻す
 - [ ] 相手の音量スライダーが効き、再読み込み後も値が残る
 
 ### 自分の操作

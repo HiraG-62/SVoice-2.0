@@ -1,22 +1,18 @@
 import fs from 'node:fs';
 import readline from 'node:readline';
-import { PLAYER_DATA_FIELDS } from '@svoice/shared';
 import { loadEnvironment, parseGameConfig } from '../src/config';
 import {
   advanceScenario, createScenarioState, DEFAULT_SWEEP_SECONDS, parseFakeGameArgs, parseReplayLines,
   placeAtDistance, resolveFakeGameEndpoint, SEND_INTERVAL_MS, SWEEP_MAX_DISTANCE, sweepDistance,
+  NUMERIC_PLAYER_FIELDS, setPlayerField,
   type FakeGameOptions, type Renames,
 } from './fakeGame';
 
 const REQUEST_TIMEOUT_MS = 5_000;
-const NUMERIC_FIELDS = PLAYER_DATA_FIELDS.filter((field) => field !== 'name');
-function isNumericField(field: string): field is typeof NUMERIC_FIELDS[number] {
-  return NUMERIC_FIELDS.some((candidate) => candidate === field);
-}
 const HELP = `コマンド:
   d <距離>                  2 人目以降と 1 人目の距離
   sweep [秒]                距離を 0〜${SWEEP_MAX_DISTANCE} で往復（既定 ${DEFAULT_SWEEP_SECONDS} 秒周期）
-  set <番号|all> <項目> <値>  例: set 0 mute 2 / set all telephone 1 / set 1 useMegaphone 1
+  set <番号|all> <項目> <値>  例: set 1 location.server 2 / set 0 music 2 / set all radio.number 5
   stop / start              送信停止（5 秒後にゲーム外扱い）／再開
   show / help / exit`;
 
@@ -74,14 +70,16 @@ function startInteractive(state: InteractiveState) {
     d: ([value]) => { state.distance = Number(value) || 0; state.sweepSeconds = null; },
     sweep: ([seconds]) => { state.sweepSeconds = Number(seconds) || DEFAULT_SWEEP_SECONDS; state.sweepStartedAt = Date.now(); },
     set: ([target, field, value]) => {
-      if (!isNumericField(field)) {
-        console.log(`項目: ${NUMERIC_FIELDS.join(', ')}`);
+      if (!NUMERIC_PLAYER_FIELDS.some(candidate => candidate === field)) {
+        console.log(`項目: ${NUMERIC_PLAYER_FIELDS.join(', ')}`);
         return;
       }
       const players = state.scenario.players;
       const targets = target === 'all' ? players : players[Number(target)] ? [players[Number(target)]] : [];
       if (targets.length === 0) { console.log('番号が範囲外'); return; }
-      targets.forEach((player) => { player[field] = Number(value); });
+      const numeric = Number(value);
+      if (value === undefined || !Number.isFinite(numeric)) { console.log('有限数が必要'); return; }
+      targets.forEach((player) => { setPlayerField(player, field, numeric); });
     },
     stop: () => { state.sending = false; }, start: () => { state.sending = true; }, show,
     help: () => console.log(HELP), exit: () => process.exit(0),

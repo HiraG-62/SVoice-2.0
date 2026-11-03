@@ -1,7 +1,7 @@
 import type { IngameSettings, PlayerData } from '@svoice/shared';
 import { decodeMemberName } from '@svoice/shared';
 import type { RoomPublication } from '@skyway-sdk/room';
-import { calcPlayerVolume, getDistance, shouldSubscribe } from './volume';
+import { evaluatePlayerVolume, getDistance, shouldSubscribe, type VolumeDecision } from './volume';
 import { createSubscriptionController } from './subscription';
 import { errorCode } from './diagnostics';
 import { ANALYSER_FFT_SIZE, MAX_SUBSCRIBERS, receiveGain, SYNC_INTERVAL_MS, VOICE_CENTER, VOICE_INTERVAL_MS, VOICE_THRESHOLD } from './constants';
@@ -58,7 +58,7 @@ export async function createVoiceRoom(credentials: RoomCredentials, ports: Voice
     let gainNode: GainNode | undefined;
     let voice = false;
     let distanceVolume = 0;
-    let reason = 'ゲーム外';
+    let reason: VolumeDecision['reason'] = 'offGame';
 
     function updateGain() {
       if (!gainNode) return;
@@ -115,11 +115,11 @@ export async function createVoiceRoom(credentials: RoomCredentials, ports: Voice
       },
     });
 
-    async function sync(volumes: Map<string, number>, inGame: boolean) {
+    async function sync(decision: VolumeDecision, inGame: boolean) {
       const state = ports.state();
       const speaker = state.speakers.includes(tag);
-      distanceVolume = speaker ? 1 : inGame ? volumes.get(tag) ?? 0 : 0;
-      reason = speaker ? '全体発言' : !inGame ? 'ゲーム外' : !state.settings ? '距離設定なし' : distanceVolume > 0 ? '距離音量あり' : '距離音量なし';
+      distanceVolume = decision.volume;
+      reason = decision.reason;
       updateGain();
       try { await controller.sync(shouldSubscribe(inGame, speaker, distanceVolume)); }
       catch (error) { ports.warning(`受信同期失敗: ${errorCode(error)}`); }
@@ -143,9 +143,12 @@ export async function createVoiceRoom(credentials: RoomCredentials, ports: Voice
     if (disposed) return;
     const state = ports.state();
     const self = state.players.find(p => p.name === state.gamerTag);
-    const volumes = self && state.settings
-      ? calcPlayerVolume(self, getDistance(self, state.players), state.players, state.settings) : new Map<string, number>();
-    for (const receiver of receivers.values()) void receiver.sync(volumes, !!self);
+    const distances = self ? getDistance(self, state.players) : new Map<string, number>();
+    for (const [tag, receiver] of receivers) {
+      const decision = evaluatePlayerVolume(self, state.players.find(player => player.name === tag),
+        distances.get(tag) ?? 0, state.settings, state.speakers.includes(tag));
+      void receiver.sync(decision, !!self);
+    }
   }
 
   async function addPublication(publication: RoomPublication) {

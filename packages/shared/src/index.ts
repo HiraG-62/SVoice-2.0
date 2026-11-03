@@ -2,21 +2,27 @@ import { z } from 'zod';
 export { encodeMemberName, decodeMemberName } from './memberName';
 
 export const playerDataSchema = z.object({
-  name: z.string(),
-  dimension: z.number(), x: z.number(), y: z.number(), z: z.number(),
-  telephone: z.number(), hasTelephone: z.number(),
-  useMegaphone: z.number(), useMicrophone: z.number(),
-  transceiverType: z.number(), transceiverNumber: z.number(), mute: z.number(),
-  voiceRangeOutput: z.number(), volumeOutput: z.number(),
-  voiceRangeInput: z.number(), volumeInput: z.number(),
+  name: z.string().min(1),
+  location: z.object({
+    server: z.number().finite(), dimension: z.number().finite(),
+    coordinates: z.object({ x: z.number().finite(), y: z.number().finite(), z: z.number().finite() }),
+  }),
+  telephone: z.number().finite(), hasTelephone: z.number().finite(),
+  useMegaphone: z.number().finite(), useMicrophone: z.number().finite(),
+  transceiver: z.object({ type: z.number().finite(), number: z.number().finite() }),
+  radio: z.object({ type: z.number().finite(), number: z.number().finite() }),
+  music: z.number().finite(), mute: z.number().finite(),
+  voiceOptions: z.object({
+    rangeOutput: z.number().finite(), volumeOutput: z.number().finite(),
+    rangeInput: z.number().finite(), volumeInput: z.number().finite(),
+  }),
 });
 
 export type PlayerData = z.infer<typeof playerDataSchema>;
 
 export const PLAYER_DATA_FIELDS = [
-  'name', 'dimension', 'x', 'y', 'z', 'telephone', 'hasTelephone',
-  'useMegaphone', 'useMicrophone', 'transceiverType', 'transceiverNumber', 'mute',
-  'voiceRangeOutput', 'volumeOutput', 'voiceRangeInput', 'volumeInput',
+  'name', 'location', 'telephone', 'hasTelephone', 'useMegaphone', 'useMicrophone',
+  'transceiver', 'radio', 'music', 'mute', 'voiceOptions',
 ] as const satisfies readonly (keyof PlayerData)[];
 
 const volumeSettingSchema = z.object({

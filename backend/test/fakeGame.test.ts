@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advanceScenario, createScenarioState, parseFakeGameArgs, parseReplayLines, renamePlayers, resolveFakeGameEndpoint } from '../scripts/fakeGame';
+import { advanceScenario, createPlayer, createScenarioState, setPlayerField, parseFakeGameArgs, parseReplayLines, renamePlayers, resolveFakeGameEndpoint } from '../scripts/fakeGame';
 
 describe('偽ゲームサーバーの引数', () => {
   it('対話モードと非対話モードを選ぶ', () => {
@@ -27,18 +27,18 @@ describe('偽ゲームサーバーの引数', () => {
 describe('移動シナリオ', () => {
   it('static は全員同じ位置に置く', () => {
     const { players } = advanceScenario(createScenarioState(['A', 'B'], 1), 'static', 1000);
-    expect(players.map(({ x, y, z }) => [x, y, z])).toEqual([[0, 64, 0], [0, 64, 0]]);
+    expect(players.map(({ location: { coordinates: { x, y, z } } }) => [x, y, z])).toEqual([[0, 64, 0], [0, 64, 0]]);
   });
 
   it('sweep は 20 秒周期で 0〜40 を往復する', () => {
     const state = createScenarioState(['A', 'B', 'C'], 1);
     for (const [elapsed, distance] of [[0, 0], [5000, 20], [10000, 40], [20000, 0]]) {
       const { players } = advanceScenario(state, 'sweep', elapsed);
-      expect(players[0].x).toBe(0);
-      expect(players[1].x).toBeCloseTo(distance);
-      expect(players[2].x).toBeCloseTo(distance);
+      expect(players[0].location.coordinates.x).toBe(0);
+      expect(players[1].location.coordinates.x).toBeCloseTo(distance);
+      expect(players[2].location.coordinates.x).toBeCloseTo(distance);
     }
-    expect(state.players[1].x).toBe(0);
+    expect(state.players[1].location.coordinates.x).toBe(0);
   });
 
   it('walk は同じ seed で再現でき、範囲から出ない', () => {
@@ -48,8 +48,8 @@ describe('移動シナリオ', () => {
       first = advanceScenario(first, 'walk', i * 200);
       second = advanceScenario(second, 'walk', i * 200);
       for (const player of first.players) {
-        expect(Math.abs(player.x)).toBeLessThanOrEqual(40);
-        expect(Math.abs(player.z)).toBeLessThanOrEqual(40);
+        expect(Math.abs(player.location.coordinates.x)).toBeLessThanOrEqual(40);
+        expect(Math.abs(player.location.coordinates.z)).toBeLessThanOrEqual(40);
       }
     }
     expect(first).toEqual(second);
@@ -85,4 +85,27 @@ describe('capture の replay', () => {
     ('無効な記録を拒否する: %s', (input) => {
       expect(() => parseReplayLines(input)).toThrow();
     });
+});
+
+describe('入れ子の set', () => {
+  it.each(['location.server', 'location.dimension', 'location.coordinates.x', 'location.coordinates.y', 'location.coordinates.z',
+    'transceiver.type', 'transceiver.number', 'radio.type', 'radio.number', 'voiceOptions.rangeOutput',
+    'voiceOptions.volumeOutput', 'voiceOptions.rangeInput', 'voiceOptions.volumeInput', 'music', 'telephone', 'hasTelephone', 'mute', 'useMegaphone', 'useMicrophone'])('数値の葉を変更する: %s', field => {
+    const player = createPlayer('A');
+    expect(setPlayerField(player, field, 2)).toBe(true);
+    const actual = field.split('.').reduce<unknown>((value, key) => (value as Record<string, unknown>)[key], player);
+    expect(actual).toBe(2);
+  });
+  it.each(['x', 'dimension', 'transceiverType', 'voiceRangeOutput', 'name', '__proto__.x', 'location', 'radio.unknown'])('旧名や不正な項目を拒否する: %s', field => {
+    expect(setPlayerField(createPlayer('A'), field, 2)).toBe(false);
+  });
+  it('非有限数を拒否する', () => {
+    expect(setPlayerField(createPlayer('A'), 'music', NaN)).toBe(false);
+    expect(setPlayerField(createPlayer('A'), 'music', Infinity)).toBe(false);
+  });
+  it('新形式の replay を変換せず保つ', () => {
+    const players = [createPlayer('A')];
+    const [frame] = parseReplayLines(JSON.stringify({ receivedAt: '2026-11-04T00:00:00Z', json: players }));
+    expect(JSON.parse(frame.body)).toEqual(players);
+  });
 });

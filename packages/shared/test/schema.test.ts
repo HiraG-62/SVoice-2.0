@@ -13,9 +13,24 @@ describe('共有スキーマ', () => {
     expect([...PLAYER_DATA_FIELDS].sort()).toEqual(Object.keys(playerDataSchema.shape).sort());
   });
 
-  it('プレイヤーの数値フィールドを検証する', () => {
-    const data = Object.fromEntries(PLAYER_DATA_FIELDS.map((field) => [field, field === 'name' ? 'Player' : 0]));
+  const data = {
+    name: 'Player', location: { server: 1, dimension: 0, coordinates: { x: 0, y: 64, z: 0 } },
+    telephone: 0, hasTelephone: 0, useMegaphone: 0, useMicrophone: 0, music: 0, mute: 0,
+    transceiver: { type: 2, number: 0 }, radio: { type: 2, number: 0 },
+    voiceOptions: { rangeOutput: 100, volumeOutput: 100, rangeInput: 100, volumeInput: 100 },
+  };
+  it('新しいプレイヤー形式を受け付ける', () => {
     expect(playerDataSchema.safeParse(data).success).toBe(true);
-    expect(playerDataSchema.safeParse({ ...data, x: '0' }).success).toBe(false);
+  });
+  it.each(['0', true, null, NaN, Infinity, -Infinity])('数値の変換や非有限数を受け付けない: %s', value => {
+    expect(playerDataSchema.safeParse({ ...data, music: value }).success).toBe(false);
+    expect(playerDataSchema.safeParse({ ...data, location: { ...data.location, coordinates: { x: value, y: 0, z: 0 } } }).success).toBe(false);
+    expect(playerDataSchema.safeParse({ ...data, radio: { type: value, number: 0 } }).success).toBe(false);
+    expect(playerDataSchema.safeParse({ ...data, voiceOptions: { ...data.voiceOptions, rangeOutput: value } }).success).toBe(false);
+  });
+  it('旧形式と空の名前を受け付けない', () => {
+    const { location, ...rest } = data;
+    expect(playerDataSchema.safeParse({ ...rest, dimension: 0, x: 0, y: 64, z: 0 }).success).toBe(false);
+    expect(playerDataSchema.safeParse({ ...data, name: '' }).success).toBe(false);
   });
 });
