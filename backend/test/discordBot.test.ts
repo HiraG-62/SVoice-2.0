@@ -132,6 +132,24 @@ describe('人数表示 Bot の番号', () => {
 });
 
 describe('Bot ログイン', () => {
+  it('中止後は再試行せずログイン待ちから戻る', async () => {
+    const controller = new AbortController();
+    const login = vi.fn(() => new Promise(() => {}));
+    const result = loginWithRetry({ login }, 'dummy', 0, { signal: controller.signal });
+    controller.abort();
+    await expect(result).resolves.toBe(false);
+    expect(login).toHaveBeenCalledOnce();
+  });
+
+  it('リトライ待ちを中止すると次のログインを始めない', async () => {
+    const controller = new AbortController();
+    const login = vi.fn().mockRejectedValue(new Error('login failed'));
+    const wait = vi.fn(async () => { controller.abort(); });
+    const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    await expect(loginWithRetry({ login }, 'dummy', 0, { wait, logger, signal: controller.signal })).resolves.toBe(false);
+    expect(login).toHaveBeenCalledOnce();
+  });
+
   it('失敗は最大 5 回で終了する', async () => {
     const login = vi.fn().mockRejectedValue(new Error('login failed'));
     const wait = vi.fn(async () => {});

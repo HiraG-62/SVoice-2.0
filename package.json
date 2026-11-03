@@ -8,7 +8,9 @@
   "scripts": {
     "dev": "node frontend/scripts/dev.mjs",
     "build": "pnpm -r --if-present build",
-    "test": "pnpm -r --if-present test",
+    "package": "pnpm build && node tools/package/build-sea.mjs",
+    "package:smoke": "node tools/package/smoke.mjs",
+    "test": "node --test tools/package/*.test.mjs && pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck && pnpm typecheck:e2e",
     "dev:e2e": "node frontend/scripts/dev.mjs --e2e",
     "e2e": "playwright test --config e2e/playwright.config.ts",
@@ -25,6 +27,7 @@
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "concurrently": "^10.0.6",
+    "postject": "1.0.0-alpha.6",
     "tsx": "^4.23.15"
   }
 }

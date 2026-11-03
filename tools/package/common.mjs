@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { readdir, stat, mkdir, writeFile } from 'node:fs/promises';
+import { readdir, mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -41,7 +41,7 @@ export async function bundle(directory) {
   assets['native/davey.node'] = require.resolve('@snazzah/davey-win32-x64-msvc', { paths: [dirname(davey)] });
   await writeFile(join(directory, 'assets.json'), JSON.stringify(assets, null, 2));
   const entry = join(directory, 'entry.mjs');
-  await writeFile(entry, `import { launch } from ${JSON.stringify(join(ROOT, 'tools/package/runtime.mjs'))};\nlaunch(() => import(${JSON.stringify(join(ROOT, 'backend/dist/index.cjs'))}), () => import(${JSON.stringify(join(ROOT, 'frontend/.output/server/index.mjs'))}));\n`);
+  await writeFile(entry, `import { launch } from ${JSON.stringify(join(ROOT, 'tools/package/runtime.mjs'))};\nvoid launch(() => import(${JSON.stringify(join(ROOT, 'backend/dist/index.cjs'))}).then(module => module.default ?? module), () => import(${JSON.stringify(join(ROOT, 'frontend/.output/server/index.mjs'))}));\n`);
   await esbuild.build({
     entryPoints: [entry], outfile: join(directory, 'app.cjs'), bundle: true,
     platform: 'node', format: 'cjs', target: 'node24', sourcemap: false,
@@ -51,7 +51,7 @@ export async function bundle(directory) {
       'import.meta.url': 'globalThis.__packagingImportUrl',
       '__dirname': 'globalThis.__packagingBackendDist',
     },
-    banner: { js: `globalThis.__packagingRoot = require('node:path').dirname(process.env.SVOICE_PACKAGING_FOLDER ? process.argv[1] : process.execPath);\nglobalThis.__packagingBackendDist = require('node:path').join(globalThis.__packagingRoot, 'dist');\nglobalThis.__packagingImportUrl = require('node:url').pathToFileURL(require('node:path').join(globalThis.__packagingRoot, 'server/index.mjs')).href;` },
+    banner: { js: `globalThis.__packagingRoot = require('node:path').dirname(process.execPath);\nglobalThis.__packagingBackendDist = require('node:path').join(globalThis.__packagingRoot, 'dist');\nglobalThis.__packagingImportUrl = require('node:url').pathToFileURL(require('node:path').join(globalThis.__packagingRoot, 'server/index.mjs')).href;` },
     logLevel: 'warning',
     logOverride: { 'ignored-bare-import': 'silent' },
     plugins: [{
@@ -63,13 +63,4 @@ export async function bundle(directory) {
     }],
   });
   return assets;
-}
-
-export async function measure(directory, started, deliveryFiles) {
-  let bytes = 0;
-  for (const file of deliveryFiles) bytes += (await stat(join(directory, file))).size;
-  const result = { seconds: Number(((performance.now() - started) / 1000).toFixed(2)), bytes, files: deliveryFiles.length, node: process.version };
-  await writeFile(join(directory, 'delivery-files.json'), JSON.stringify(deliveryFiles, null, 2));
-  await writeFile(join(directory, 'build-result.json'), JSON.stringify(result, null, 2));
-  console.log(JSON.stringify(result));
 }

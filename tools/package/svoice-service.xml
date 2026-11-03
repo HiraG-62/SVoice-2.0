@@ -2,11 +2,18 @@
   <id>SyakasabaVoice</id>
   <name>しゃかさばボイス</name>
   <executable>%BASE%\svoice.exe</executable>
+  <startarguments></startarguments>
+  <stopexecutable>%BASE%\svoice.exe</stopexecutable>
+  <stoparguments>--stop</stoparguments>
   <workingdirectory>%BASE%</workingdirectory>
   <env name="ENV_FILE" value="%BASE%\app.env" />
   <startmode>Automatic</startmode>
   <onfailure action="restart" delay="10 sec" />
   <stoptimeout>15 sec</stoptimeout>
+  <stopparentprocessfirst>true</stopparentprocessfirst>
   <logpath>%BASE%\data\service-logs</logpath>
-  <log mode="roll" />
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
 </service>

@@ -116,6 +116,8 @@ frontend（開発は `frontend/.env`・`.env.development`。キーの一覧と�
 
 本番 frontend: ルートの `pnpm start`（`frontend/scripts/start.mjs`）が `ENV_FILE`、未指定なら `frontend/.env.production` を読み、既存の環境変数を優先する。相対パスは frontend/ 基準。`PORT` は既定 3000、`TLS_KEY_PATH` と `TLS_CERT_PATH` が両方あれば HTTPS、両方なければ HTTP。証明書は backend と同じく 1 秒ごとに確認し、失敗時は現在の証明書を保持する。Nitro の `node-listener` と静的ファイル配信を利用する。秘密情報の既定値は空とし、実行時の `NUXT_*` で渡す。`pnpm check:secrets` は一時設定とダミー値でビルドし、`.output/` 全体への埋め込みを検査する。
 
+本番: `pnpm package` で `release/svoice/svoice.exe`（Node SEA。frontend と backend を 1 プロセスにまとめる）を作り、WinSW 2.x で Windows サービスとして動かす。設定は exe の隣の `app.env`、停止は `svoice.exe --stop`（名前付きパイプ＋停止用トークン）。手順は `docs/DEPLOY.md`、方式の比較は `docs/PACKAGING.md`。
+
 開発: ルートの `pnpm dev` が `backend/.env.development`・`frontend/.env.development` を自動で使い、backend・frontend・偽ゲームサーバー（Alice と Bob の距離を往復）を一括起動する。本番・開発とも Windows 機で動かす。
 
 ## 検証方法

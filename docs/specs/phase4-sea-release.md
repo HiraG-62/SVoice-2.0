@@ -19,6 +19,12 @@
 - 設定: `ENV_FILE` が未設定なら、**exe と同じフォルダーの `app.env`** を読む。相対パス（`DATA_DIR`、証明書、`tokens.json`、距離設定のデータ）は exe のフォルダーから解決する。起動したフォルダー（cwd）に依存しない。
 - 既定値は本番と同じ（ポート、`NODE_ENV=production`）。
 - **終了処理**: SIGINT / SIGTERM / SIGBREAK（WinSW の停止）を受けたら、frontend・Socket.IO・受信・内部 API のサーバーを閉じ、Discord の Bot を切断してから終了する。15 秒以内に終わらなければ強制終了する（WinSW の `stoptimeout` と合わせる）。
+- **停止コマンド（2026-11-04 追加）**: Ctrl+C（コンソールのイベント）は、実行する環境によって届かないことがある（claude のセッションからは Git Bash・PowerShell のどちらでも届かず、`package:smoke` の SIGINT の確認が時間切れになった）。そこで、コンソールに頼らない停止の経路を用意する:
+  - `svoice.exe --stop` を実行すると、動いている `svoice.exe` に、同じ機械の中だけで通じる名前付きパイプ（名前はサービスの ID と exe のフォルダーから決める。ほかのユーザーや別のフォルダーの exe には届かない）で終了を伝え、終了するまで待ってから、終了コード 0 で終わる（15 秒で時間切れなら 0 以外）。
+  - 受け取った側は、SIGINT のときと同じ終了処理を行う。
+  - **認証**: パイプは Node の標準の `net` で、既定のセキュリティのまま作る（実行時に PowerShell を呼んで ACL を設定する方法は採らない。環境に左右され壊れやすいため）。起動のたびに 32 バイトのランダムな停止用トークンを作り、`<DATA_DIR>/stop.token` に書く（終了時に削除する）。`--stop` はこのファイルを読んでトークンを送り、受け取った側は `timingSafeEqual` で一致したときだけ止まる。一致しなければ何もせず 1 行ログに出す。
+  - WinSW の設定では、停止に `stopexecutable`（`%BASE%\svoice.exe`）と `stoparguments`（`--stop`）を使う。Ctrl+C の処理（SIGINT / SIGTERM / SIGBREAK）も残す。
+  - `package:smoke` の終了の確認は、`--stop` を主にする。Ctrl+C の確認は、届く環境でだけ行い、届かない環境では「未確認」として結果に残す（失敗にしない）。
 - **片方の異常**: frontend か backend のどちらかが起動に失敗した、または致命的なエラーで止まったら、プロセス全体を 0 以外で終了する（WinSW の `onfailure` で再起動させるため。片方だけが止まったまま動き続けない）。
 - 起動時に、バージョン・読み込んだ設定ファイルの場所・主要なパス・待ち受けるポートを 1 行ずつログに出す（秘密の値は出さない）。
 
@@ -45,6 +51,7 @@
 ### 変更してよいファイル
 - `tools/package/`、ルートの `package.json`・`pnpm-lock.yaml`、`.gitignore`、`docs/DEPLOY.md`（新規）、`docs/PACKAGING.md`（推奨案が採用されたことの追記に限る）
 - SEA の中で使う統合の処理のために必要なら `frontend/scripts/`・`backend/src/index.ts`（既存の `pnpm dev` / `pnpm start` の動きを変えない範囲）
+- 終了処理のために、`backend/src/discordBot.ts`・`backend/src/discord/bots.ts`・`backend/src/discord/memberCount.ts` と関連するテスト（Bot のログイン待ちの中止、Bot の `destroy` の完了待ち、人数表示のタイマーの停止を外から呼べるようにする追加に限る。ログイン・人数表示・内部 API の動きは変えない）
 
 ### 完了条件（RESULT は箇条書き 10 行程度）
 - ルートで `pnpm test` / `pnpm typecheck` / `pnpm build` / `pnpm package` / `pnpm package:smoke` が通る。

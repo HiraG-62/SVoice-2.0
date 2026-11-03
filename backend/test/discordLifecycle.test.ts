@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { startDiscordServer } from '../src/discordBot';
+import { createDiscordService, startDiscordServer } from '../src/discordBot';
 import { config } from './fixtures';
 
 const mocks = vi.hoisted(() => ({ login: vi.fn(), ready: vi.fn(), joinVoiceChannel: vi.fn() }));
@@ -33,6 +33,47 @@ vi.mock('discord.js', async () => {
 afterEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); vi.useRealTimers(); });
 
 describe('Discord 起動', () => {
+  it('ログイン待ちの中止では Bot を破棄し、内部 API を起動しない', async () => {
+    const tokensPath = path.resolve('dummy-tokens.json');
+    const originalRead = fs.readFileSync;
+    vi.spyOn(fs, 'readFileSync').mockImplementation((file, options) => file === tokensPath ? '{"tokens":["dummy"]}' : originalRead(file, options));
+    const destroy = vi.fn(async () => {});
+    mocks.login.mockImplementation((bot: { destroy: typeof destroy }) => {
+      bot.destroy = destroy;
+      return new Promise(() => {});
+    });
+    const onServer = vi.fn();
+    const service = createDiscordService({ ...config, DISCORD_TOKENS_PATH: tokensPath }, () => [], { onServer });
+    await service.close();
+    await expect(service.ready).resolves.toBeUndefined();
+    expect(destroy).toHaveBeenCalled();
+    expect(onServer).not.toHaveBeenCalled();
+  });
+
+  it('終了時は Bot の切断完了を待ち、人数表示を停止する', async () => {
+    const tokensPath = path.resolve('dummy-tokens.json');
+    const originalRead = fs.readFileSync;
+    vi.spyOn(fs, 'readFileSync').mockImplementation((file, options) => file === tokensPath ? '{"tokens":["dummy"]}' : originalRead(file, options));
+    let finish: () => void = () => {};
+    const destroy = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+    mocks.login.mockImplementation(async (bot: { markReady: () => void; destroy: typeof destroy }) => {
+      bot.destroy = destroy;
+      bot.markReady();
+    });
+    const service = createDiscordService({ ...config, DISCORD_TOKENS_PATH: tokensPath, DISCORD_HTTP_PORT: 0, DISCORD_TLS_PORT: 0 }, () => []);
+    const servers = await service.ready;
+    expect(servers).toBeDefined();
+    await Promise.all(Object.values(servers!).map(server => server.listening ? undefined : once(server, 'listening')));
+    let closed = false;
+    const closing = service.close().then(() => { closed = true; });
+    await Promise.resolve();
+    expect(closed).toBe(false);
+    finish();
+    await closing;
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(Object.values(servers!).every(server => !server.listening)).toBe(true);
+  });
+
   it.each([false, true])('人数表示 enabled=%s でも Bot はログインする', async (enabled) => {
     const tokensPath = path.resolve('dummy-tokens.json');
     const originalRead = fs.readFileSync;
