@@ -10,7 +10,7 @@
 - `e2e/`: Playwright の E2E（実際の SkyWay と合成音声で 2 人の通話を確かめる）
 - `backend/`: Node.js + TypeScript（`src/`）。`gameReceiver.ts`（プレイヤーデータ受信 :30000）、`socketServer.ts`（Socket.IO :3001）、`discordBot.ts`（Bot・内部 API :5000/:1234）、`config.ts`（環境変数）、エントリ `index.ts`。tsup で `dist/index.cjs` にビルドする
 - `packages/shared/`: `@svoice/shared`。frontend と backend で共有する型（`PlayerData`、`IngameSettings`、Socket.IO のイベント型）と zod スキーマ
-- `tools/`: workspace 外の単体スクリプト（`capture-player-data.mjs`: Minecraft からの生データの取得）
+- `tools/`: workspace 外の単体スクリプト（`capture-player-data.mjs`: Minecraft からの生データの取得、`package/`: 1 つの実行ファイルへのまとめ方の試作。結果は `docs/PACKAGING.md`）
 - `docs/specs/<taskId>.md`: タスクごとの設計書
 
 ## コマンド
