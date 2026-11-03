@@ -1,0 +1,20 @@
+import { copyFile, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { bundle, RELEASE, run, measure } from './common.mjs';
+
+const started = performance.now();
+const directory = join(RELEASE, 'sea');
+const assets = await bundle(directory);
+const main = join(directory, 'app.cjs');
+await writeFile(main, `globalThis.__packagingReadAsset = key => Buffer.from(require('node:sea').getAsset(key));\nglobalThis.__packagingAssetKeys = ${JSON.stringify(Object.keys(assets))};\n${await readFile(main, 'utf8')}`);
+const blob = join(directory, 'sea.blob');
+const config = join(directory, 'sea.json');
+await writeFile(config, JSON.stringify({ main, output: blob, assets, disableExperimentalSEAWarning: true, useSnapshot: false, useCodeCache: false }, null, 2));
+run(process.execPath, ['--experimental-sea-config', config]);
+const executable = join(directory, 'svoice.exe');
+await copyFile(process.execPath, executable);
+const pnpmCommand = execFileSync('where.exe', ['pnpm.cmd'], { encoding: 'utf8' }).trim().split(/\r?\n/)[0];
+const pnpmCli = process.env.npm_execpath ?? join(dirname(pnpmCommand), 'node_modules/pnpm/bin/pnpm.cjs');
+run(process.execPath, [pnpmCli, 'dlx', 'postject@1.0.0-alpha.6', executable, 'NODE_SEA_BLOB', blob, '--sentinel-fuse', 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2']);
+await measure(directory, started, ['svoice.exe']);
