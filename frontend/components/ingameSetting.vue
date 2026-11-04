@@ -1,28 +1,23 @@
 <script setup lang="ts">
-import { useDisplay } from 'vuetify';
 import { useSettingsStore } from '../stores/settings';
-
-const { mdAndUp, smAndDown } = useDisplay();
+import { useNotificationStore } from '../stores/notification';
+const notification = useNotificationStore();
 
 const { themeColorLight } = useThemeColor();
 const settings = useSettingsStore();
 const ingameSettings = ref(settings.value ? structuredClone(toRaw(settings.value)) : null);
 watch(() => settings.value, value => { ingameSettings.value = value ? structuredClone(toRaw(value)) : null; });
 
-const containerStyle = computed(() => {
-  if (mdAndUp.value) {
-    return { width: '60%' }
-  } else if (smAndDown.value) {
-    return { width: '90%' }
-  } else {
-    return { width: '80%' }
-  }
-})
-
 const setSettings = async () => {
   settings.replace(ingameSettings.value ? structuredClone(toRaw(ingameSettings.value)) : null);
-  await settings.save();
+  try {
+    await settings.save();
+  } catch {
+    notification.show('設定保存失敗', 'error');
+    return;
+  }
   useSetSettingSocket();
+  notification.show('設定保存完了', 'success');
 }
 
 const getDefaultSettings = async () => {
@@ -32,13 +27,13 @@ const getDefaultSettings = async () => {
 </script>
 
 <template>
-  <v-container :style="containerStyle" class="mx-auto">
+  <v-container style="width: 90%;" class="mx-auto">
     <v-row>
-      <v-col cols="5" sm="4" md="3" lg="3" xl="3">
+      <v-col cols="auto">
         <v-btn @click="setSettings" class="mb-4" color="green">変更確定</v-btn>
       </v-col>
       <v-spacer></v-spacer>
-      <v-col cols="7" sm="4" md="4" lg="4" xl="4">
+      <v-col cols="auto">
         <v-btn @click="getDefaultSettings" class="mb-4" color="red">デフォルトに戻す</v-btn>
       </v-col>
     </v-row>

@@ -33,7 +33,7 @@
 - 「変更確定」は、今は `settings.save()` の失敗を拾っていない。失敗したら `useSetSettingSocket()` を呼ばず、失敗の通知を出す。
 - **デバッグ送信の完了は、サーバーの受け取りで判断する。** Socket.IO の `debug` イベントに ack を付ける（イベント名と送る内容は変えない）。
   - `packages/shared` の `debug` イベントの型に、省略可能な ack `(result: { ok: boolean }) => void` を追加する。
-  - backend（`backend/src/socketServer.ts`）は、書き込んだら `ack?.({ ok: true })`、制限超過で捨てたら `ack?.({ ok: false })` を返す。ack がない送信（古い画面）も今までどおり受け付ける。書き込みの例外の扱いは今のまま変えず、例外が出たら `ok: false` を返す。
+  - backend（`backend/src/socketServer.ts`）は、書き込んだら `ack?.({ ok: true })`、制限超過で捨てたら `ack?.({ ok: false })` を返す。ack がない送信（古い画面）も今までどおり受け付ける。保存に失敗したとき（`createDebugWriter` が `false` を返したとき）は `ok: false` を返す。
   - frontend は ack を待つ（タイムアウトは定数。目安 5 秒）。`ok: true` なら成功、`ok: false`・タイムアウト・未接続なら失敗の通知を出す。送信中はボタンを `loading` にして、二重に押せないようにする。
   - デバッグ送信は、通話に参加していない状態でも押せる（I6）。そのときソケットが未接続なら、失敗の通知を出す（今と同じく、データは届かない）。
 
@@ -58,8 +58,9 @@
 - 新規: 通知のストアか composable（`frontend/stores/` または `frontend/composables/`）、純粋な関数を切り出す場合は `frontend/utils/`
 - `packages/shared/src/index.ts`（`debug` の ack の型だけ）
 - `backend/src/socketServer.ts`（`debug` の ack だけ）
+- `backend/src/debugLog.ts`（`createDebugWriter` が保存の成否を `boolean` で返す変更だけ。`appendFileSync` が成功したら `true`。その後の `pruneLogs` の失敗では `false` にしない）
 - テスト: `frontend/test/`、`backend/test/socketServer.test.ts`、`packages/shared` のテスト、`e2e/`（追加してよい）
-- `docs/DESIGN.md`（画面の説明と `debug` の ack の記述）
+- `docs/DESIGN.md` は claude が更新する（codex は編集しない）
 
 ## テスト方針（必須）
 - 単体テスト

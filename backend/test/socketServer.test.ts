@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmdirSync, unlinkSync, writeFileSync, mkdirSync, utimesSync, truncateSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import fs from 'node:fs';
 import { io, type Socket } from 'socket.io-client';
 import type { ClientToServerEvents, ServerToClientEvents } from '@svoice/shared';
 import { createSocketToken } from '@svoice/shared/socket-token';
@@ -44,6 +45,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   clients.splice(0).forEach((client) => client.disconnect());
   await new Promise<void>((resolve) => server.io.close(() => resolve()));
   const directory = path.join(logsDirectory, 'logs');
@@ -55,6 +57,27 @@ afterEach(async () => {
 });
 
 describe('socketServer', () => {
+  it('debug の保存成功と制限超過を ack で返す', async () => {
+    const socket = await connect('Player', false);
+    const debug = (data: unknown) => new Promise<{ ok: boolean }>(resolve => socket.emit('debug', data, resolve));
+    expect(await debug('あ'.repeat(30_000))).toEqual({ ok: false });
+    for (let i = 0; i < 5; i++) expect(await debug({ i })).toEqual({ ok: true });
+    expect(await debug({ rejected: true })).toEqual({ ok: false });
+    expect(readFileSync(path.join(logsDirectory, 'logs', '2026-11-03.jsonl'), 'utf8').trim().split('\n')).toHaveLength(5);
+  });
+  it('debug の書き込み失敗を ack で返す', async () => {
+    const socket = await connect('Player', false);
+    vi.spyOn(fs, 'appendFileSync').mockImplementation(() => { throw new Error('保存不可'); });
+    const result = await new Promise(resolve => socket.emit('debug', {}, resolve));
+    expect(result).toEqual({ ok: false });
+  });
+  it('ログ整理が失敗しても保存済みの debug は成功を返す', async () => {
+    const socket = await connect('Player', false);
+    vi.spyOn(fs, 'readdirSync').mockImplementation(() => { throw new Error('整理不可'); });
+    const result = await new Promise(resolve => socket.emit('debug', {}, resolve));
+    expect(result).toEqual({ ok: true });
+    expect(readFileSync(path.join(logsDirectory, 'logs', '2026-11-03.jsonl'), 'utf8')).toContain('Player');
+  });
   it.each([undefined, 'invalid', createSocketToken({ gamerTag: 'Player', discordId: '123456789012345678', admin: true, exp: 1 }, config.API_SECRET)])('トークンなし・不正・期限切れを接続拒否する', async (token) => {
     const socket: ClientSocket = io(url, { transports: ['websocket'], forceNew: true, reconnection: false, auth: { token } });
     clients.push(socket);

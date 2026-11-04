@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
 import { useCallStore } from '../stores/call';
+import { useNotificationStore } from '../stores/notification';
+import { shouldSubmitJoinAuth } from '../utils/joinAuthSubmit';
 import { joinAuthMessage, joinRoleErrorMessage, loginErrorMessage } from '~/utils/authMessages';
 
 const { session, loggedIn } = useUserSession();
@@ -12,6 +14,7 @@ const authLocked = ref(false);
 const authError = ref('');
 const password = ref('');
 const call = useCallStore();
+const notification = useNotificationStore();
 const { error: errorMessage } = storeToRefs(call);
 const isJoining = computed(() => call.status === 'joined');
 if (session.value?.user) call.identify(session.value.user.gamerTag);
@@ -21,6 +24,7 @@ call.setError(loginErrorMessage(useRoute().query.error));
 const loginClick = () => navigateTo('/auth/discord', { external: true });
 
 const joinAuthClick = async () => {
+  if (authLocked.value || authPending.value) return;
   authPending.value = true;
   authError.value = '';
   try {
@@ -33,6 +37,12 @@ const joinAuthClick = async () => {
   } finally {
     authPending.value = false;
   }
+};
+
+const joinAuthKeydown = (event: KeyboardEvent) => {
+  if (!shouldSubmitJoinAuth(event, authLocked.value, authPending.value)) return;
+  event.preventDefault();
+  void joinAuthClick();
 };
 
 const joinClick = async () => {
@@ -95,7 +105,7 @@ onMounted(async () => {
                             <p class="text-center text-red mb-5" role="alert">{{ authError }}</p>
                           </v-col>
                           <v-col cols="12" class="d-flex justify-center align-center">
-                            <v-text-field v-model="password" :disabled="authLocked || authPending" type="text" bg-color="white" name="input-10-1" label="パスワード" style="max-width: 300px;" ></v-text-field>
+                            <v-text-field v-model="password" @keydown="joinAuthKeydown" :disabled="authLocked || authPending" type="text" bg-color="white" name="input-10-1" label="パスワード" style="max-width: 300px;" ></v-text-field>
                             <v-btn :disabled="authLocked || authPending" :loading="authPending" @click="joinAuthClick" color="#5865f2" width="80" class="ml-4">送信</v-btn>
                           </v-col>
                         </v-row>
@@ -141,6 +151,9 @@ onMounted(async () => {
         </v-row>
       </v-container>
     </v-main>
+    <v-snackbar :key="notification.sequence" v-model="notification.open" :color="notification.color" :timeout="notification.timeout" :z-index="3000">
+      {{ notification.message }}
+    </v-snackbar>
   </v-app>
 </template>
 

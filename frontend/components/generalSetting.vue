@@ -1,7 +1,21 @@
 <script setup lang="ts">
+import { useNotificationStore } from '../stores/notification';
 const { clear } = useUserSession();
 const logout = async () => { await useVoice().leave(); await clear(); };
-const sendDebug = () => useVoice().sendDebug();
+const notification = useNotificationStore();
+const sending = ref(false);
+const sendDebug = async () => {
+  if (sending.value) return;
+  sending.value = true;
+  try {
+    const ok = await useVoice().sendDebug();
+    notification.show(ok ? '送信完了' : '送信失敗', ok ? 'success' : 'error');
+  } catch {
+    notification.show('送信失敗', 'error');
+  } finally {
+    sending.value = false;
+  }
+};
 </script>
 
 <template>
@@ -9,7 +23,7 @@ const sendDebug = () => useVoice().sendDebug();
     <AuthState>
       <template #default="{ loggedIn, clear }">
         <v-row justify="center" no-gutters>
-          <v-col cols="10" sm="10" md="8" lg="6" xl="6">
+          <v-col cols="10">
             <v-list-item>
               <v-list-item-subtitle>
                 Discord認証
@@ -20,7 +34,7 @@ const sendDebug = () => useVoice().sendDebug();
               <v-list-item-subtitle>
                 デバッグ用 <span class="text-red">※運営の指示以外で押さないでください</span>
               </v-list-item-subtitle>
-              <v-btn @click="sendDebug" color="red">送信</v-btn>
+              <v-btn @click="sendDebug" :loading="sending" :disabled="sending" color="red">送信</v-btn>
             </v-list-item>
           </v-col>
         </v-row>

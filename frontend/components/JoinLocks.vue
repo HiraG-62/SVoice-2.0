@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useNotificationStore } from '../stores/notification';
+const notification = useNotificationStore();
 const locks = ref<{ id: string; gamerTag: string; lockedAt: string }[]>([]);
 const pending = ref(false);
 const error = ref('');
@@ -20,9 +22,11 @@ async function unlock(id: string) {
   error.value = '';
   try {
     await $fetch('/api/admin/unlockJoin', { method: 'POST', body: { id } });
+    notification.show('ロック解除完了', 'success');
     await load();
   } catch {
     error.value = 'ロック解除失敗';
+    notification.show(error.value, 'error');
   } finally {
     pending.value = false;
   }

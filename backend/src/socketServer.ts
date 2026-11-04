@@ -90,13 +90,16 @@ export function createSocketServer({ config, getData, logsDirectory = path.join(
       logger.log('切断: ' + socket.id);
     });
     const acceptDebug = createDebugLimiter();
-    socket.on('debug', (data) => {
+    socket.on('debug', (data, ack) => {
+      const reply = typeof ack === 'function' ? ack : undefined;
       const date = now();
       if (!acceptDebug(data, date.getTime())) {
         logger.log(`debug 制限超過: ${socket.id}`);
+        reply?.({ ok: false });
         return;
       }
-      writeDebug(socket.data.gamerTag, data, date);
+      const ok = writeDebug(socket.data.gamerTag, data, date);
+      reply?.({ ok });
     });
   });
 

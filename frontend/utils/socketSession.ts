@@ -2,6 +2,7 @@ import type { Socket } from 'socket.io-client';
 import type { ClientToServerEvents, ServerToClientEvents } from '@svoice/shared';
 
 export const JOIN_TIMEOUT_MS = 10_000;
+export const DEBUG_ACK_TIMEOUT_MS = 5_000;
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 export type SocketFailure = 'connection' | 'timeout';
 export class SocketJoinError extends Error {
@@ -72,6 +73,15 @@ export function createSocketSession(socket: AppSocket, callbacks: Callbacks) {
     onSpeaker: () => socket.emit('onSpeaker'),
     offSpeaker: () => socket.emit('offSpeaker'),
     kick: (gamerTag: string) => socket.emit('kick', gamerTag),
-    debug: (data: unknown) => socket.emit('debug', data),
+    debug: (data: unknown): Promise<boolean> => {
+      if (!socket.connected) return Promise.resolve(false);
+      return new Promise(resolve => {
+        const timeout = setTimeout(() => resolve(false), DEBUG_ACK_TIMEOUT_MS);
+        socket.emit('debug', data, result => {
+          clearTimeout(timeout);
+          resolve(result.ok === true);
+        });
+      });
+    },
   };
 }

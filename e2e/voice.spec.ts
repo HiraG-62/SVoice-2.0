@@ -71,6 +71,18 @@ test('参加・距離・通話・ディメンション・メガホン・ミュ�
     }
     await expect.poll(async () => (await snapshot(alice)).inGame).toBe(true);
     await expect.poll(async () => (await snapshot(alice)).users).toEqual([{ gamerTag: bobTag, gain: 1 }]);
+    await expect(alice.getByRole('tab', { name: '全てのプレイヤー' }).locator('.v-badge__badge')).toHaveText('1');
+    await expect.poll(async () => (await snapshot(alice)).nearby.length).toBe(1);
+    await expect(alice.getByRole('tab', { name: '近くのプレイヤー' }).locator('.v-badge__badge')).toHaveText('1');
+    await alice.getByRole('tab', { name: '全てのプレイヤー' }).click();
+    const allPlayerVolume = alice.locator('.v-data-table').nth(1).getByRole('slider');
+    await expect(allPlayerVolume).toBeVisible();
+    await allPlayerVolume.press('ArrowLeft');
+    await expect.poll(async () => (await snapshot(alice)).users[0]?.gain).toBe(.99);
+    await expect.poll(async () => (await snapshot(alice)).nearby[0]?.gain).toBe(.99);
+    expect(await alice.evaluate(tag => localStorage.getItem(tag), bobTag)).toBe('0.99');
+    await allPlayerVolume.press('ArrowRight');
+    await alice.getByRole('tab', { name: '近くのプレイヤー' }).click();
     for (const [distance, gain] of [[3, 2], [12, 16 / 15], [25, 0]]) {
       players = placeAtDistance(players, distance!);
       if (!gain) await expect.poll(async () => (await snapshot(alice)).nearby).toEqual([]);
@@ -198,11 +210,14 @@ test('参加・距離・通話・ディメンション・メガホン・ミュ�
     await alice.locator('.mdi-cog').click();
     await alice.getByRole('tab', { name: '一般', exact: true }).click();
     await alice.getByRole('button', { name: '送信', exact: true }).click();
+    await expect(alice.locator('.v-snackbar').getByRole('status')).toHaveText('送信完了');
+    await expect(alice.getByRole('dialog')).toBeVisible();
     await expect.poll(() => fs.existsSync(directory) && fs.readdirSync(directory).some(file =>
       file.endsWith('.jsonl') && parseDebugRecords(fs.readFileSync(path.join(directory, file), 'utf8'), aliceTag).length > 0)).toBe(true);
     expect(senderError).toBe(false);
     await expect.poll(async () => (await snapshot(bob)).joined).toBe(false);
     await expect.poll(async () => (await snapshot(alice)).users).toEqual([]);
+    await expect(alice.getByRole('tab', { name: '全てのプレイヤー' }).locator('.v-badge__badge')).toHaveText('0');
   } catch (error) {
     console.log('画面状態', await snapshot(alice));
     console.log('音声診断', await diagnostic(alice));

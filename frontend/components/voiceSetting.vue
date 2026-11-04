@@ -19,6 +19,7 @@ const micMax = computed(() => isExtendsMic.value ? EXTENDED_LEVEL_MAX : NORMAL_L
 const phoneMax = NORMAL_LEVEL_MAX, micMin = 0, phoneMin = 0, micIndicatorMin = 0;
 const micIndicatorMax = DEFAULT_LEVEL / 2;
 const micIndicatorColor = computed(() => sliderColor(micIndicator.value, micIndicatorMax));
+const micExtensionHint = `入力音量の上限 ${NORMAL_LEVEL_MAX} → ${EXTENDED_LEVEL_MAX}。声が小さいとき用`;
 const changePhoneVolume = () => audio.setPhoneLevel(Math.min(phoneLevel.value, phoneMax));
 const changeMicVolume = () => audio.setMicLevel(Math.min(micLevel.value, micMax.value));
 const clickExtendsMic = () => { isExtendsMic.value = !isExtendsMic.value; changeMicVolume(); };
@@ -38,20 +39,25 @@ onUnmounted(() => useVoice().mic.stopTest());
 <template>
   <v-list>
     <v-row justify="center" no-gutters>
-      <v-col cols="12" sm="6" md="4" lg="3" xl="3">
+      <v-col cols="12" sm="6">
         <v-list-item>
-          <v-list-item-subtitle>入力デバイス<span v-show="isJoining" class="text-red ml-4">※入室後は変更できません</span></v-list-item-subtitle>
+          <v-list-item-subtitle class="setting-label">入力デバイス<span v-show="isJoining" class="text-red ml-4">※入室後は変更できません</span></v-list-item-subtitle>
           <v-select :disabled="isJoining" v-model="selectedInput" :items="audioInputs" item-value="label" item-title="label" return-object variant="outlined"></v-select>
         </v-list-item>
         <v-list-item>
-          <v-list-item-subtitle>
+          <v-list-item-subtitle class="setting-label">
             入力音量
-            <span @click="clickExtendsMic" style="cursor: pointer;" class="ml-10">
+            <span @click="clickExtendsMic" style="cursor: pointer;" class="ml-4">
               上限拡張
               <v-icon :color="isExtendsMic ? 'red' : ''">
                 {{ isExtendsMic ? 'mdi-lock-open-variant' : 'mdi-lock' }}
               </v-icon>
             </span>
+            <v-tooltip :text="micExtensionHint" open-on-click>
+              <template #activator="{ props }">
+                <v-btn v-bind="props" icon="mdi-information-outline" variant="text" size="x-small" :aria-label="micExtensionHint" />
+              </template>
+            </v-tooltip>
           </v-list-item-subtitle>
           <v-slider v-model="micLevel" :color="themeColorLight(2)" :min="micMin" :max="micMax" :step="0.1"
             style="padding-left: 15px;">
@@ -62,9 +68,9 @@ onUnmounted(() => useVoice().mic.stopTest());
           </v-slider>
         </v-list-item>
       </v-col>
-      <v-col cols="12" sm="6" md="4" lg="3" xl="3">
+      <v-col cols="12" sm="6">
         <v-list-item>
-          <v-list-item-subtitle>出力デバイス<span class="text-red ml-4">※変更不可</span></v-list-item-subtitle>
+          <v-list-item-subtitle class="setting-label">出力デバイス<span class="text-red ml-4">※OS の既定の出力を使用</span></v-list-item-subtitle>
           <v-select disabled v-model="selectedOutput" :items="audioOutputs" item-value="label" item-title="label" :readonly="true" variant="outlined"></v-select>
         </v-list-item>
         <v-list-item>
@@ -80,7 +86,7 @@ onUnmounted(() => useVoice().mic.stopTest());
       </v-col>
     </v-row>
     <v-row justify="center" no-gutters>
-      <v-col cols="12" sm="10" md="7" lg="5" xl="5">
+      <v-col cols="12" sm="10">
         <v-list-item>
           <v-list-item-subtitle>マイクテスト</v-list-item-subtitle>
           <v-switch v-model="isNoiseSuppression" :color="themeColor" label="ノイズ抑制" inset class="ml-4"/>
@@ -100,3 +106,9 @@ onUnmounted(() => useVoice().mic.stopTest());
     </v-row>
   </v-list>
 </template>
+
+<style scoped>
+.setting-label {
+  white-space: normal;
+}
+</style>

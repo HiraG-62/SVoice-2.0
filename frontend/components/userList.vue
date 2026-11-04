@@ -31,16 +31,6 @@ const headers = [
   }
 ]
 
-const gamerTagHeaders = [
-  {
-    title: 'ゲーマータグ',
-    align: 'start' as const,
-    sortable: true,
-    key: 'gamerTag',
-    width: '100%'
-  },
-]
-
 function openDialog(gamerTag: string) {
   selectedUser.value = gamerTag;
   dialog.value = true;
@@ -57,8 +47,8 @@ const kick = (gamerTag: string) => {
 <template>
   <div class="h-100 w-100">
     <v-tabs v-model="userListTabs" bg-color="white" fixed-tabs>
-      <v-tab :color="themeColor" value="nearby" width="50%" style="max-width: 100%;">近くのプレイヤー</v-tab>
-      <v-tab :color="themeColor" value="all" width="50%" style="max-width: 100%;">全てのプレイヤー</v-tab>
+      <v-tab :color="themeColor" value="nearby" width="50%" style="max-width: 100%;">近くのプレイヤー<v-badge inline :content="nearbyUserList.length" :color="themeColor" /></v-tab>
+      <v-tab :color="themeColor" value="all" width="50%" style="max-width: 100%;">全てのプレイヤー<v-badge inline :content="userList.length" :color="themeColor" /></v-tab>
     </v-tabs>
     <v-tabs-window v-model="userListTabs" class="h-100">
       <v-tabs-window-item value="nearby" class="h-100">
@@ -79,7 +69,7 @@ const kick = (gamerTag: string) => {
         </v-data-table>
       </v-tabs-window-item>
       <v-tabs-window-item value="all" class="h-100">
-        <v-data-table items-per-page="-1" :headers="gamerTagHeaders" :items="userList" :hide-default-footer="true"
+        <v-data-table items-per-page="-1" :headers="headers" :items="userList" :hide-default-footer="true"
           :fixed-header="true" no-data-text="他プレイヤーがいません。" class="h-100 table">
           <template v-slot:item.gamerTag="{ item }">
             <div v-if="discordAuth">

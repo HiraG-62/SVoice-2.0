@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import type { Socket } from 'socket.io-client';
 import type { ClientToServerEvents, ServerToClientEvents } from '@svoice/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSocketSession, JOIN_TIMEOUT_MS } from '../utils/socketSession';
+import { createSocketSession, DEBUG_ACK_TIMEOUT_MS, JOIN_TIMEOUT_MS } from '../utils/socketSession';
 
 function setup() {
   const incoming = new EventEmitter();
@@ -21,6 +21,30 @@ function setup() {
 afterEach(() => { vi.useRealTimers(); });
 
 describe('Socket の参加と後始末', () => {
+  it.each([true, false])('デバッグの ack の成否を返す: %s', async ok => {
+    const { session, fake, outgoing } = setup();
+    fake.connected = true;
+    outgoing.mockImplementation((event, _data, ack: (result: { ok: boolean }) => void) => {
+      if (event === 'debug') ack({ ok });
+    });
+    await expect(session.debug({ message: 'test' })).resolves.toBe(ok);
+  });
+  it('未接続ではデバッグを送信せず失敗する', async () => {
+    const { session, outgoing } = setup();
+    await expect(session.debug({})).resolves.toBe(false);
+    expect(outgoing).not.toHaveBeenCalled();
+  });
+  it('デバッグの ack が来なければタイムアウトし、遅い ack を無視する', async () => {
+    vi.useFakeTimers();
+    const { session, fake, outgoing } = setup();
+    fake.connected = true;
+    const pending = session.debug({});
+    await vi.advanceTimersByTimeAsync(DEBUG_ACK_TIMEOUT_MS);
+    await expect(pending).resolves.toBe(false);
+    outgoing.mock.calls[0]![2]({ ok: true });
+    await expect(pending).resolves.toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it('リスナーを先に登録し、退出と再参加で重複しない', async () => {
     const { session, incoming, outgoing, callbacks } = setup();
     for (let i = 0; i < 3; i++) {

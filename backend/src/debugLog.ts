@@ -32,10 +32,13 @@ export function createDebugWriter(directory: string, logger: Pick<Console, 'log'
       const dd = String(date.getDate()).padStart(2, '0');
       const file = path.join(directory, `${yyyy}-${mm}-${dd}.jsonl`);
       fs.appendFileSync(file, JSON.stringify({ receivedAt: date.toISOString(), gamerTag, data }) + '\n');
-      pruneLogs(directory, date.getTime());
     } catch {
       logger.log('debug 保存失敗');
+      return false;
     }
+    try { pruneLogs(directory, date.getTime()); }
+    catch { logger.log('debug 保存失敗'); }
+    return true;
   };
 }
 

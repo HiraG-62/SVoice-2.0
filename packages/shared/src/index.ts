@@ -71,5 +71,5 @@ export interface ClientToServerEvents {
   offSpeaker: () => void;
   exit: () => void;
   kick: (gamerTag: string) => void;
-  debug: (data: unknown) => void;
+  debug: (data: unknown, ack?: (result: { ok: boolean }) => void) => void;
 }

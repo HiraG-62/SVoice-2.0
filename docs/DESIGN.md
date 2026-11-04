@@ -45,7 +45,7 @@ backend の起動は `backend/src/index.ts` が設定（`config.ts`）を読み�
 | C→S→全員 | `onSpeaker` / `offSpeaker` → `setAdminSpeaker` | 全体発言。開始は管理者のみ、停止は本人も可。接続ごとに管理する |
 | C→S | `exit` | 全体発言者と room `joined` から外す |
 | C→S→対象 | `kick` → `kicked` | 管理者のみ。同じゲーマータグのすべての接続に送る |
-| C→S | `debug` | 誰でも可（I6）。64KB・1 分 5 回まで。`<DATA_DIR>/logs/YYYY-MM-DD.jsonl` に `{ receivedAt, gamerTag, data }` を追記。30 日・合計 100MB を超えた古いログは削除する |
+| C→S | `debug` | 誰でも可（I6）。64KB・1 分 5 回まで。`<DATA_DIR>/logs/YYYY-MM-DD.jsonl` に `{ receivedAt, gamerTag, data }` を追記。30 日・合計 100MB を超えた古いログは削除する。ack があれば、保存したら `{ ok: true }`、制限超過か保存失敗なら `{ ok: false }` を返す（ack なしの送信も受け付ける）。画面は ack を 5 秒待って「送信完了」「送信失敗」を通知する |
 
 - 管理者以外の管理操作は無視して 1 行ログに出す。
 - 保存したデバッグ情報は `pnpm --filter @svoice/backend debug-log [--tag <ゲーマータグ>] [--date YYYY-MM-DD]` で読む。
@@ -73,7 +73,8 @@ backend の起動は `backend/src/index.ts` が設定（`config.ts`）を読み�
 1. 未ログイン → `/auth/discord`（`server/routes/auth/discord.get.ts`、スコープは `identify` のみ）。backend の `getUserName` と `checkAdminRole` を呼び、セッションに `{ discordId, discordAuth, gamerTag }` を保存する。失敗理由ごとにログイン画面のメッセージを分ける。開発では開発用ログイン（下記）も使える。
 2. 参加ロールがなければパスワード入力 → `/api/joinAuth`（残り回数とロックを表示。入力欄はテキスト表示のまま。I5）。
 3. 「参加」→ `composables/useVoice.ts` がマイク・SkyWay・Socket の順に準備する。失敗したら理由ごとのメッセージを出す（マイク／トークン／SkyWay への参加／Socket の接続・タイムアウト）。
-4. 参加中は `voiceHeader`（退出・全体発言・ミュート・ノイズ抑制・設定）と `userList`（近くのプレイヤー／全員、管理者はキック可）を表示する。設定ダイアログのタブは「一般」「サウンド」、管理者には「インゲーム」「参加ロック」も出る。
+4. 参加中は `voiceHeader`（退出・全体発言・ミュート・ノイズ抑制・設定）と `userList`（近くのプレイヤー／全員。タブに人数を表示し、どちらの一覧でも相手ごとの音量を変えられる。管理者はキック可）を表示する。設定ダイアログは、画面幅が `smAndDown` なら全画面、それより広ければ幅 800px の中央のダイアログで、閉じるとマイクテストを止める。タブは「一般」「サウンド」、管理者には「インゲーム」「参加ロック」も出る。
+5. 操作の結果（インゲーム設定の保存・デバッグ送信・参加ロックの解除）は、`stores/notification.ts` の通知（`v-snackbar`、3 秒）で知らせる。参加パスワードは Enter でも送れる（日本語入力の変換中の Enter は除く）。
 
 ### 状態管理（Pinia）
 - `stores/audio.ts`: 入出力デバイス、マイク音量・出力音量（localStorage の `micLevel` / `phoneLevel`、既定 100、上限 200・拡張時 2000）、自分のミュート、ノイズ抑制。

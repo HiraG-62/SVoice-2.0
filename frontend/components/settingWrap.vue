@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useDisplay } from 'vuetify';
+const { smAndDown } = useDisplay();
 const { session } = useUserSession();
 
 const discordAuth = session.value?.user?.discordAuth;
@@ -14,6 +16,11 @@ const closeSetting = () => {
   setting.value = false;
 }
 
+const updateSetting = (open: boolean) => {
+  if (!open) { closeSetting(); return; }
+  setting.value = true;
+};
+
 const open = () => {
   setting.value = true;
 }
@@ -25,8 +32,8 @@ defineExpose({
 </script>
 
 <template>
-  <v-dialog v-model="setting" fullscreen hide-overlay scrollable transition="dialog-bottom-transition">
-    <v-card>
+  <v-dialog :model-value="setting" @update:model-value="updateSetting" :fullscreen="smAndDown" :width="smAndDown ? undefined : 800" :max-width="smAndDown ? undefined : '90vw'" scrollable :transition="smAndDown ? 'dialog-bottom-transition' : 'dialog-transition'">
+    <v-card :style="{ maxHeight: smAndDown ? '100dvh' : '90dvh' }">
       <v-toolbar dark :color="themeColor">
         <v-btn icon dark @click="closeSetting">
           <v-icon>mdi-close</v-icon>
@@ -39,7 +46,7 @@ defineExpose({
         <v-tab v-if="discordAuth" value="ingame">インゲーム</v-tab>
         <v-tab v-if="discordAuth" value="joinLocks">参加ロック</v-tab>
       </v-tabs>
-      <v-tabs-window v-model="settingTabs" style="overflow-y: auto;">
+      <v-tabs-window v-model="settingTabs" style="overflow-y: auto; min-height: 0;">
         <v-tabs-window-item value="general">
           <general-setting v-model="setting" class="mt-10"/>
         </v-tabs-window-item>
