@@ -30,6 +30,12 @@ interface DiscordAppDependencies {
   logger?: Pick<Console, 'log' | 'error'>;
 }
 
+export function describeError(error: unknown) {
+  if (!(error instanceof Error)) return String(error);
+  const { code, status } = error as Error & { code?: unknown; status?: unknown };
+  return [error.name, code, status, error.message].filter(value => value !== undefined && value !== '').join(' ');
+}
+
 export function validateDiscordId(id: unknown): id is string {
   return typeof id === 'string' && /^\d{17,20}$/.test(id);
 }
@@ -93,8 +99,8 @@ export function createDiscordApp({ config, fetchGuild, nextBot, logger = console
     if (!validateDiscordId(id)) { res.status(400).json({ error: 'Invalid Discord ID' }); return; }
     try {
       res.status(200).json(await updateRole(id, role, operation, disabledResult));
-    } catch {
-      logger.error(`ロール操作失敗: ${operation}`);
+    } catch (error) {
+      logger.error(`ロール操作失敗: ${operation}: ${describeError(error)}`);
       res.status(500).json({ error: 'Internal server error' });
     }
   };
@@ -126,8 +132,8 @@ export function createDiscordApp({ config, fetchGuild, nextBot, logger = console
         return { ok: true, locked: false, remaining: MAX_JOIN_FAILURES };
       });
       res.status(200).json(result);
-    } catch {
-      logger.error('参加認証失敗');
+    } catch (error) {
+      logger.error(`参加認証失敗: ${describeError(error)}`);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
