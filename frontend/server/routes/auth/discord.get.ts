@@ -1,4 +1,5 @@
 import { sendRedirect } from 'nuxt/server';
+import { DISCORD_STARTING } from '../../../utils/authMessages';
 
 export default defineOAuthDiscordEventHandler({
   config: {
@@ -24,7 +25,7 @@ export default defineOAuthDiscordEventHandler({
     } catch(err) {
       const reason = err && typeof err === 'object' && 'data' in err
         && err.data && typeof err.data === 'object' && 'error' in err.data ? err.data.error : 'internal_error';
-      const error = reason === 'nickname_missing' || reason === 'member_not_found' ? reason : 'internal_error';
+      const error = reason === 'nickname_missing' || reason === 'member_not_found' || reason === DISCORD_STARTING ? reason : 'internal_error';
       return sendRedirect(event, `/?error=${error}`)
     }
 

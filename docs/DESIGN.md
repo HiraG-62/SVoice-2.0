@@ -51,6 +51,7 @@ backend の起動は `backend/src/index.ts` が設定（`config.ts`）を読み�
 - 保存したデバッグ情報は `pnpm --filter @svoice/backend debug-log [--tag <ゲーマータグ>] [--date YYYY-MM-DD]` で読む。
 
 ### `src/internalApi.ts` と `src/discord/`
+- 内部 API は Bot のログインを待たずに listen する。ログイン中の Discord 操作は 503 `discord_starting` を返す。参加認証のパスワード照合・ロックとロック管理は利用できる。
 - `discord/bots.ts`: `tokens.json`（`{ "tokens": [...] }`）の Bot を順にログインする（1 体あたり最大 5 回リトライ）。`clientReady` をログイン前に登録する。Bot が 0 体やファイル不正でもプロセスは落ちず、Discord 機能が無効のときと同じ応答になる。
 - `discord/memberCount.ts`: **参加人数表示**。10 秒ごとに、プレイヤー数と同じ番号の Bot（上限 20）だけを指定ボイスチャンネルに入れる。`DISCORD_MEMBER_COUNT_ENABLED=false` で止まる。
 - 内部 API（送信元 IP を `INTERNAL_API_ALLOWED_IPS` で制限し、すべて `x-api-secret: API_SECRET` が必須。CORS なし。`id` は 17〜20 桁の数字）:

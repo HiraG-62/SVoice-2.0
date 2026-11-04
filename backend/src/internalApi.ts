@@ -9,6 +9,7 @@ import { createReloadingHttpsServer } from './tls';
 export const DISCORD_HTTP_PORT = 5000;
 export const DISCORD_TLS_PORT = 1234;
 const UNKNOWN_MEMBER_CODE = 10007;
+export const DISCORD_STARTING = 'discord_starting';
 
 export interface DiscordMember {
   nickname: string | null;
@@ -27,6 +28,7 @@ interface DiscordAppDependencies {
   config: BackendConfig;
   fetchGuild: () => Promise<DiscordGuild>;
   nextBot: () => void;
+  isStarting?: () => boolean;
   logger?: Pick<Console, 'log' | 'error'>;
 }
 
@@ -40,7 +42,7 @@ export function validateDiscordId(id: unknown): id is string {
   return typeof id === 'string' && /^\d{17,20}$/.test(id);
 }
 
-export function createDiscordApp({ config, fetchGuild, nextBot, logger = console }: DiscordAppDependencies) {
+export function createDiscordApp({ config, fetchGuild, nextBot, isStarting = () => false, logger = console }: DiscordAppDependencies) {
   const app = express();
   app.use(restrictIps(config.INTERNAL_API_ALLOWED_IPS));
   app.use(express.json());
@@ -66,6 +68,7 @@ export function createDiscordApp({ config, fetchGuild, nextBot, logger = console
       logger.log(`getUserName: ${error} ...${id.slice(-4)}`);
       res.status(status).json({ error });
     };
+    if (config.DISCORD_ENABLED && isStarting()) { fail(503, DISCORD_STARTING); return; }
     if (!config.DISCORD_ENABLED) { fail(503, 'discord_unavailable'); return; }
     try {
       const guild = await fetchGuild();
@@ -97,6 +100,7 @@ export function createDiscordApp({ config, fetchGuild, nextBot, logger = console
   const roleHandler = (role: string, operation: 'check' | 'add' | 'remove', disabledResult = false): RequestHandler => async (req, res) => {
     const id = req.query.id?.toString();
     if (!validateDiscordId(id)) { res.status(400).json({ error: 'Invalid Discord ID' }); return; }
+    if (config.DISCORD_ENABLED && isStarting()) { res.status(503).json({ error: DISCORD_STARTING }); return; }
     try {
       res.status(200).json(await updateRole(id, role, operation, disabledResult));
     } catch (error) {
@@ -127,11 +131,14 @@ export function createDiscordApp({ config, fetchGuild, nextBot, logger = console
           const { failures } = locks.fail(id, gamerTag);
           return { ok: false, locked: failures >= MAX_JOIN_FAILURES, remaining: MAX_JOIN_FAILURES - failures };
         }
-        await updateRole(id, config.DISCORD_SERVER_ROLE_ID_JOIN, 'add');
+        if (req.body?.skipRole !== true) {
+          if (config.DISCORD_ENABLED && isStarting()) return { error: DISCORD_STARTING };
+          await updateRole(id, config.DISCORD_SERVER_ROLE_ID_JOIN, 'add');
+        }
         locks.clear(id);
         return { ok: true, locked: false, remaining: MAX_JOIN_FAILURES };
       });
-      res.status(200).json(result);
+      res.status('error' in result ? 503 : 200).json(result);
     } catch (error) {
       logger.error(`参加認証失敗: ${describeError(error)}`);
       res.status(500).json({ error: 'Internal server error' });
@@ -162,10 +169,14 @@ export function createDiscordServers(app: ReturnType<typeof createDiscordApp>, c
 }
 
 export function listenDiscordServers(servers: ReturnType<typeof createDiscordServers>, config: BackendConfig) {
-  servers.httpServer.listen(config.DISCORD_HTTP_PORT, () => {
-    console.log(`Discord server running on port ${config.DISCORD_HTTP_PORT}`);
-  });
-  servers.server.listen(config.DISCORD_TLS_PORT, () => {
-    console.log(`Discord server running on port ${config.DISCORD_TLS_PORT}`);
-  });
+  return Promise.all(([
+    [servers.httpServer, config.DISCORD_HTTP_PORT], [servers.server, config.DISCORD_TLS_PORT],
+  ] as const).map(([server, port]) => new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, () => {
+      server.off('error', reject);
+      console.log(`Discord server running on port ${port}`);
+      resolve();
+    });
+  })));
 }

@@ -7,6 +7,7 @@ import defaults from '../settings/default.json';
 vi.mock('h3', () => ({
   defineEventHandler: (handler: unknown) => handler,
   readBody: (event: unknown) => readBody(event),
+  setResponseStatus: (event: unknown, status: number) => setResponseStatus(event, status),
 }));
 vi.mock('node:fs', () => ({ default: { writeFileSync: vi.fn() } }));
 vi.mock('../server/utils/settingStore', () => ({ getSettingStore: () => ({ file: 'unused-setting.json' }) }));
@@ -16,6 +17,7 @@ const discordUser = { discordId: '234567890123456789', gamerTag: 'Carol', discor
 const fetchBackend = vi.fn();
 const getSession = vi.fn();
 const readBody = vi.fn();
+const setResponseStatus = vi.fn();
 const event = {} as H3Event;
 vi.stubGlobal('defineEventHandler', (handler: unknown) => handler);
 vi.stubGlobal('getUserSession', getSession);
@@ -46,6 +48,19 @@ describe('セッションに基づく API', () => {
     await handler(event);
     expect(fetchBackend).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ query: { id: discordUser.discordId } }));
   });
+  it('Bot のログイン中は 503 とエラーを中継する', async () => {
+    getSession.mockResolvedValue({ user: discordUser });
+    fetchBackend.mockRejectedValueOnce({ statusCode: 503, data: { error: 'discord_starting' } });
+    expect(await getJoinRole(event)).toEqual({ error: 'discord_starting' });
+    expect(setResponseStatus).toHaveBeenCalledWith(event, 503);
+  });
+  it('起動待ち以外の失敗は従来どおり例外にする', async () => {
+    getSession.mockResolvedValue({ user: discordUser });
+    const error = { statusCode: 500, data: { error: 'internal_error' } };
+    fetchBackend.mockRejectedValueOnce(error);
+    await expect(getJoinRole(event)).rejects.toBe(error);
+    expect(setResponseStatus).not.toHaveBeenCalled();
+  });
   it.each([
     [getJoinRole, true],
     [setPhoneRole, { success: true }],
@@ -67,7 +82,13 @@ describe('セッションに基づく API', () => {
     readBody.mockResolvedValue({ pass: 'wrong', id: '999999999999999999', gamerTag: 'Mallory' });
     fetchBackend.mockResolvedValue(result);
     expect(await joinAuth(event)).toEqual(result);
-    expect(fetchBackend).toHaveBeenCalledWith('http://backend/joinAuth', expect.objectContaining({ body: { pass: 'wrong', id: user.discordId, gamerTag: user.gamerTag } }));
+    expect(fetchBackend).toHaveBeenCalledWith('http://backend/joinAuth', expect.objectContaining({ body: { pass: 'wrong', id: user.discordId, gamerTag: user.gamerTag, skipRole: true } }));
+  });
+  it('通常ログインでは入力の skipRole を中継しない', async () => {
+    getSession.mockResolvedValue({ user: discordUser });
+    readBody.mockResolvedValue({ pass: 'password', skipRole: true });
+    await joinAuth(event);
+    expect(fetchBackend).toHaveBeenCalledWith('http://backend/joinAuth', expect.objectContaining({ body: { pass: 'password', id: discordUser.discordId, gamerTag: discordUser.gamerTag } }));
   });
   it.each([null, {}, { pass: 123 }])('不正な参加パスワードは 400: %j', async body => {
     readBody.mockResolvedValue(body);

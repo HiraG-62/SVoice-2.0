@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createAdminChecker } from '../server/utils/adminPolicy';
 import { parseSettings } from '../server/utils/settingsValidation';
-import { joinAuthMessage, loginErrorMessage } from '../utils/authMessages';
+import { joinAuthMessage, joinRoleErrorMessage, loginErrorMessage } from '../utils/authMessages';
 import defaults from '../settings/default.json';
 
 describe('管理者判定', () => {
@@ -56,9 +56,20 @@ describe('認証メッセージ', () => {
     expect(joinAuthMessage({ ok: false, locked: true, remaining: 0 })).toBe('ロック中。運営に連絡');
   });
   it('OAuth の失敗理由を区別する', () => {
+    expect(loginErrorMessage('discord_starting')).toBe('Discord 接続待ち。少し待って再ログイン');
     expect(loginErrorMessage('nickname_missing')).toContain('ニックネーム');
     expect(loginErrorMessage('member_not_found')).toBe('Discordサーバーに参加していません。');
     expect(loginErrorMessage('internal_error')).toContain('時間を空けて');
     expect(loginErrorMessage(undefined)).toBe('');
+  });
+  it.each([
+    [{ statusCode: 503, data: { error: 'discord_starting' } }, 'Discord 接続待ち。少し待って再読み込み'],
+    [{ status: 503, data: { error: 'discord_starting' } }, 'Discord 接続待ち。少し待って再読み込み'],
+    [{ statusCode: 500, data: { error: 'discord_starting' } }, '参加ロールの確認失敗'],
+    [{ statusCode: 503, data: { error: 'discord_unavailable' } }, '参加ロールの確認失敗'],
+    [new Error('offline'), '参加ロールの確認失敗'],
+    [null, '参加ロールの確認失敗'],
+  ])('参加ロールのエラーを区別する: %j', (error, expected) => {
+    expect(joinRoleErrorMessage(error)).toBe(expected);
   });
 });

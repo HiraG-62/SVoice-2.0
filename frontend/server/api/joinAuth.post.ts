@@ -1,5 +1,5 @@
 import type { JoinAuthResult } from '../../utils/authMessages';
-import { requireUser } from '../utils/user';
+import { requireUser, skipsDiscordRole } from '../utils/user';
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event);
@@ -9,7 +9,8 @@ export default defineEventHandler(async (event) => {
   }
   const config = useRuntimeConfig(event);
   return $fetch<JoinAuthResult>(`${config.public.server.api.url}/joinAuth`, {
-    method: 'POST', body: { pass: body.pass, id: user.discordId, gamerTag: user.gamerTag },
+    method: 'POST', body: { pass: body.pass, id: user.discordId, gamerTag: user.gamerTag,
+      ...(skipsDiscordRole(user) ? { skipRole: true } : {}) },
     headers: { 'x-api-secret': config.apiSecret },
   });
 });

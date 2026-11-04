@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
 import { useCallStore } from '../stores/call';
-import { joinAuthMessage, loginErrorMessage } from '~/utils/authMessages';
+import { joinAuthMessage, joinRoleErrorMessage, loginErrorMessage } from '~/utils/authMessages';
 
 const { session, loggedIn } = useUserSession();
 const loading = ref(false);
@@ -44,7 +44,11 @@ const joinClick = async () => {
 onMounted(async () => {
   if (!loggedIn.value) return;
   try {
-    joinAuth.value = await $fetch('/api/getJoinRole');
+    joinAuth.value = await $fetch('/api/getJoinRole') === true;
+  } catch (error) {
+    call.setError(joinRoleErrorMessage(error));
+  }
+  try {
     await useVoice().initialize();
   } catch {
     call.setError('マイク・距離設定の初期化失敗');
@@ -72,6 +76,11 @@ onMounted(async () => {
                 <AuthState>
                   <template #default="{ loggedIn, clear }">
                     <div v-if="loggedIn">
+                      <div v-if="errorMessage">
+                        <v-col cols="12">
+                          <p class="text-center text-red">※{{ errorMessage }}</p>
+                        </v-col>
+                      </div>
                       <div v-if="!joinAuth">
                         <v-row align-content="center" no-gutters>
                           <v-col cols="12">
@@ -96,11 +105,6 @@ onMounted(async () => {
                           <voice-header />
                         </v-toolbar>
                         <v-row id="main" justify="center" align-content="center" no-gutters>
-                          <div v-if="errorMessage">
-                            <v-col cols="12">
-                              <p class="text-center text-red">※{{ errorMessage }}</p>
-                            </v-col>
-                          </div>
                           <v-btn v-if="!isJoining && !joinLoad" @click="joinClick" color="green" width="200">参加</v-btn>
                           <v-progress-circular v-else-if="joinLoad" indeterminate size="64"
                             color="blue"></v-progress-circular>

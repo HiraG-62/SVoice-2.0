@@ -15,15 +15,44 @@ afterEach(() => {
   rmdirSync(directory);
 });
 
-function setup(enabled = false) {
+function setup(enabled = false, starting = false) {
   const add = vi.fn(async () => {});
   const fetchGuild = vi.fn(async () => ({ members: { fetch: async () => ({ nickname: '[Player]', roles: { cache: new Set<string>(), add, remove: async () => {} } }) } }));
-  const app = createDiscordApp({ config: { ...config, DATA_DIR: directory, DISCORD_ENABLED: enabled }, fetchGuild, nextBot: vi.fn(), logger: { log: vi.fn(), error: vi.fn() } });
-  const auth = (pass: string, userId = id) => request(app).post('/joinAuth').set('x-api-secret', config.API_SECRET).send({ id: userId, gamerTag: 'Player', pass });
+  const app = createDiscordApp({ config: { ...config, DATA_DIR: directory, DISCORD_ENABLED: enabled }, isStarting: () => starting, fetchGuild, nextBot: vi.fn(), logger: { log: vi.fn(), error: vi.fn() } });
+  const auth = (pass: string, userId = id, skipRole?: unknown) => request(app).post('/joinAuth').set('x-api-secret', config.API_SECRET).send({ id: userId, gamerTag: 'Player', pass, skipRole });
   return { app, auth, add, fetchGuild };
 }
 
 describe('参加認証と永続ロック', () => {
+  it('ログイン中も失敗回数を記録し、正しいパスワードの 503 では回数を消さない', async () => {
+    const { auth, app, fetchGuild } = setup(true, true);
+    await auth('wrong').expect(200, { ok: false, locked: false, remaining: 4 });
+    await auth(config.JOIN_PASSWORD).expect(503, { error: 'discord_starting' });
+    await auth('wrong').expect(200, { ok: false, locked: false, remaining: 3 });
+    await request(app).get('/joinLocks').set('x-api-secret', config.API_SECRET).expect(200, []);
+    await request(app).post('/unlockJoin').set('x-api-secret', config.API_SECRET).send({ id }).expect(200);
+    await auth('wrong').expect(200, { ok: false, locked: false, remaining: 4 });
+    expect(fetchGuild).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('skipRole はログイン中=%s でもパスワードとロックを検証し、成功時に回数を消す', async starting => {
+    const { auth, add, fetchGuild } = setup(true, starting);
+    await auth('wrong', id, true).expect(200, { ok: false, locked: false, remaining: 4 });
+    await auth(config.JOIN_PASSWORD, id, true).expect(200, { ok: true, locked: false, remaining: 5 });
+    for (let failures = 1; failures <= 5; failures++) {
+      await auth('wrong', id, true).expect(200, { ok: false, locked: failures === 5, remaining: 5 - failures });
+    }
+    await auth(config.JOIN_PASSWORD, id, true).expect(200, { ok: false, locked: true, remaining: 0 });
+    expect(add).not.toHaveBeenCalled();
+    expect(fetchGuild).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, false, 'true', 1])('skipRole=%s はロール操作を省略しない', async skipRole => {
+    const { auth, add } = setup(true);
+    await auth(config.JOIN_PASSWORD, id, skipRole).expect(200);
+    expect(add).toHaveBeenCalledOnce();
+  });
+
   it('成功時だけロールを付与し、失敗回数をリセットする', async () => {
     const { auth, add } = setup(true);
     await auth('wrong').expect(200, { ok: false, locked: false, remaining: 4 });

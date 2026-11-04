@@ -15,9 +15,17 @@ export function createDiscordService(config: BackendConfig, getData: () => Playe
   const controller = new AbortController();
   const clients = new Set<Client>();
   let stopMemberCount = () => {};
-  let servers: ReturnType<typeof createDiscordServers> | undefined;
   let closing: Promise<void> | undefined;
-  const ready = (async () => {
+  const activeConfig = { ...config };
+  let starting = config.DISCORD_ENABLED;
+  let pool = createBotPool([], config.DISCORD_SERVER_ID);
+  const app = createDiscordApp({ config: activeConfig, isStarting: () => starting,
+    fetchGuild: () => pool.fetchGuild(), nextBot: () => pool.nextBot() });
+  const servers = createDiscordServers(app, config);
+  onServer(servers.httpServer);
+  onServer(servers.server);
+  const ready = listenDiscordServers(servers, config).then(() => servers);
+  const botsReady = (async () => {
     const bots = config.DISCORD_ENABLED ? await loadBots(config.DISCORD_TOKENS_PATH, {
       signal: controller.signal, onBot: bot => { clients.add(bot); },
     }) : [];
@@ -25,36 +33,30 @@ export function createDiscordService(config: BackendConfig, getData: () => Playe
     if (!config.DISCORD_ENABLED) console.log('Discord 機能は無効');
     else if (!bots.length) console.error('Discord 利用不可: Bot なし');
 
-    const activeConfig = { ...config, DISCORD_ENABLED: config.DISCORD_ENABLED && bots.length > 0 };
-    const pool = createBotPool(bots, config.DISCORD_SERVER_ID);
+    activeConfig.DISCORD_ENABLED = config.DISCORD_ENABLED && bots.length > 0;
+    pool = createBotPool(bots, config.DISCORD_SERVER_ID);
+    starting = false;
     stopMemberCount = startMemberCount(activeConfig, bots, getData);
-    const app = createDiscordApp({ config: activeConfig, ...pool });
-    servers = createDiscordServers(app, config);
-    const activeServers = servers;
-    onServer(servers.httpServer);
-    onServer(servers.server);
-    const close = () => {
-      if (controller.signal.aborted) return;
-      if (activeServers.httpServer.listening || activeServers.server.listening) return;
-      stopMemberCount();
-      for (const bot of bots) void bot.destroy();
-    };
-    servers.httpServer.on('close', close);
-    servers.server.on('close', close);
-    listenDiscordServers(servers, config);
-    return servers;
   })();
   const close = () => closing ??= (async () => {
     controller.abort();
     stopMemberCount();
-    await Promise.all([...clients].map(bot => bot.destroy()));
-    await ready.catch(() => {});
-    stopMemberCount();
-    if (servers) await Promise.all([servers.httpServer, servers.server].map(server => new Promise<void>(resolve => {
-      server.close(() => resolve());
-    })));
+    await Promise.all([
+      ...[...clients].map(bot => bot.destroy()),
+      botsReady,
+      ready.catch(() => {}).then(() => Promise.all([servers.httpServer, servers.server].map(server => new Promise<void>(resolve => {
+        server.close(() => resolve());
+      })))),
+    ]);
   })();
-  return { ready, close };
+  const onClose = () => {
+    if (controller.signal.aborted) return;
+    if (servers.httpServer.listening || servers.server.listening) return;
+    void close();
+  };
+  servers.httpServer.on('close', onClose);
+  servers.server.on('close', onClose);
+  return { ready, botsReady, close };
 }
 
 export async function startDiscordServer(config: BackendConfig, getData: () => PlayerData[] | null | undefined) {
