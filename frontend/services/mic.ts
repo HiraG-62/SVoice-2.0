@@ -1,4 +1,10 @@
-import { ANALYSER_FFT_SIZE, DEFAULT_LEVEL, micGain } from './constants';
+import { ANALYSER_FFT_SIZE, DEFAULT_LEVEL, micGain, NOISE_CHANNEL_COUNT } from './constants';
+
+// rnnoise の worklet は 1 チャンネル目しか書き込まないため、入出力をモノラルに固定して後段で左右に広げる
+const NOISE_NODE_OPTIONS: AudioWorkletNodeOptions = {
+  channelCount: NOISE_CHANNEL_COUNT, channelCountMode: 'explicit', channelInterpretation: 'speakers',
+  outputChannelCount: [NOISE_CHANNEL_COUNT],
+};
 
 export function createMicService(workletUrl: string, workletName: string) {
   let context: AudioContext | undefined;
@@ -50,7 +56,7 @@ export function createMicService(workletUrl: string, workletName: string) {
       context = audioContext;
       await audioContext.audioWorklet.addModule(workletUrl);
       if (current !== generation) return;
-      noise = new AudioWorkletNode(audioContext, workletName);
+      noise = new AudioWorkletNode(audioContext, workletName, NOISE_NODE_OPTIONS);
       gain = audioContext.createGain();
       destination = audioContext.createMediaStreamDestination();
       gain.connect(destination);

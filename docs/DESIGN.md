@@ -82,7 +82,7 @@ backend の起動は `backend/src/index.ts` が設定（`config.ts`）を読み�
 - 画面の中だけの状態（マイクテスト中、上限拡張、ダイアログの開閉など）は各コンポーネントが持つ。AudioNode や SkyWay のオブジェクトはストアに入れない。
 
 ### 音声処理（`services/`）
-- `mic.ts`（送信）: `getUserMedia`（`echoCancellation: false`, `noiseSuppression: true`。I4）→ `MediaStreamSource` →（ノイズ抑制 ON なら rnnoise の AudioWorklet）→ `GainNode`（`micLevel / 50`、ミュート中は常に 0）→ `MediaStreamDestination`。入力デバイスを変えても destination は作り直さない（配信中のトラックを保つ）。
+- `mic.ts`（送信）: `getUserMedia`（`echoCancellation: false`, `noiseSuppression: true`。I4）→ `MediaStreamSource` →（ノイズ抑制 ON なら rnnoise の AudioWorklet。rnnoise は 1 チャンネル目しか出力しないため、入出力をモノラルに固定し、後段で左右に広げる）→ `GainNode`（`micLevel / 50`、ミュート中は常に 0）→ `MediaStreamDestination`。入力デバイスを変えても destination は作り直さない（配信中のトラックを保つ）。
 - `voiceRoom.ts`（受信）: SkyWay のルームに参加し、マイクのトラックを publish する。相手ごとに受信を管理し、受信の判定に応じて subscribe / unsubscribe する。受信音声は `MediaStreamSource` → `GainNode`（`2 × 相手ごとの音量 × 距離音量 × phoneLevel / 100`、全体発言者の距離音量は 1）→ `MediaStreamDestination` → `Audio` 要素。`AnalyserNode` で発話中を判定する（200ms ごとに `|v - 128| > 1`）。停止時に Audio 要素・AudioNode・トラックを解放する。
 - `subscription.ts`: 相手ごとの購読状態を、SkyWay 側の subscription の実際の状態と 100ms ごとに同期する。取り消し・配信し直し・遅れて完了した subscribe を正しく扱う（V2・V3）。
 - `volume.ts`: 距離音量（`calcPlayerVolume`）と受信判定（`shouldSubscribe`）の純粋な関数。作り直し前の結果を固定した 41 ケースの単体テストがある（I1）。

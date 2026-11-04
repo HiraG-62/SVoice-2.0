@@ -7,6 +7,7 @@ export const PERCENT = 100;
 export const SYNC_INTERVAL_MS = 100;
 export const VOICE_INTERVAL_MS = 200;
 export const ANALYSER_FFT_SIZE = 256;
+export const NOISE_CHANNEL_COUNT = 1;
 export const VOICE_CENTER = 128;
 export const VOICE_THRESHOLD = 1;
 export const MAX_PEER_GAIN = 2;

@@ -14,9 +14,10 @@ function setup() {
     close: vi.fn(), resume: vi.fn(), state: 'running' };
   vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
   vi.stubGlobal('AudioContext', function () { return context; });
-  vi.stubGlobal('AudioWorkletNode', function () { return node(); });
+  const AudioWorkletNodeMock = vi.fn(function () { return node(); });
+  vi.stubGlobal('AudioWorkletNode', AudioWorkletNodeMock);
   const mic = createMicService('worklet', 'noise');
-  return { mic, context, gain, inputs, getUserMedia };
+  return { mic, context, gain, inputs, getUserMedia, AudioWorkletNodeMock };
 }
 afterEach(() => vi.unstubAllGlobals());
 describe('マイクの寿命とミュート', () => {
@@ -46,6 +47,13 @@ describe('マイクの寿命とミュート', () => {
     } });
     await mic.dispose();
     expect(inputs[1]!.stop).toHaveBeenCalledOnce();
+  });
+  it('ノイズ抑制の worklet は入出力をモノラルにする', async () => {
+    const { mic, context, AudioWorkletNodeMock } = setup();
+    await mic.prepare();
+    expect(AudioWorkletNodeMock).toHaveBeenCalledWith(context, 'noise', {
+      channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'speakers', outputChannelCount: [1],
+    });
   });
   it('同時に準備してもマイクとworkletの準備を1回にする', async () => {
     const { mic, context, getUserMedia } = setup();
