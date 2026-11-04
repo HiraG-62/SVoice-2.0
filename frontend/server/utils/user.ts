@@ -9,6 +9,11 @@ export async function requireUser(event: H3Event) {
   return user;
 }
 
+// 開発用ログインの discordId は Discord に存在しないため、ロール操作は DISCORD_ENABLED=false と同じ結果にする
+export function skipsDiscordRole(user: { devLogin?: boolean }): boolean {
+  return user.devLogin === true;
+}
+
 export async function isAdmin(event: H3Event): Promise<boolean> {
   const user = await requireUser(event);
   const config = useRuntimeConfig(event);

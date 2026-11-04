@@ -92,6 +92,8 @@ pnpm --filter @svoice/backend fake-game --replay 'E:\captures\capture.jsonl' --r
 - Discord Developer Portal の OAuth2 → Redirects に `http://localhost:3100/auth/discord` を登録する。
 - Discord アカウントを 2 つ使い、両者のサーバーニックネームに `[Alice]` / `[Bob]` を含める。片方に ADMIN ロールを付ける。
 
+開発用ログインを有効のままにした場合、開発用ログインの人は Discord のロール操作の対象外（参加ロールあり扱い、電話ロールは付け外ししない）。
+
 同じ `pnpm dev` で起動し、通常の「ログイン」から Discord OAuth を通す。参加ロールがない場合は参加パスワードを入力する。証明書は development では不要。backend のパスは `E:\dev\SyakasabaVC\backend\` 基準、frontend の相対 `NUXT_DATA_DIR` は `E:\dev\SyakasabaVC\frontend\` 基準。
 
 ## E2E

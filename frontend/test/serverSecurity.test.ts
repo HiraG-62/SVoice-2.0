@@ -12,6 +12,7 @@ vi.mock('node:fs', () => ({ default: { writeFileSync: vi.fn() } }));
 vi.mock('../server/utils/settingStore', () => ({ getSettingStore: () => ({ file: 'unused-setting.json' }) }));
 
 const user = { discordId: '123456789012345678', gamerTag: 'Alice Bob', discordAuth: false, devLogin: true };
+const discordUser = { discordId: '234567890123456789', gamerTag: 'Carol', discordAuth: false };
 const fetchBackend = vi.fn();
 const getSession = vi.fn();
 const readBody = vi.fn();
@@ -41,8 +42,17 @@ beforeEach(() => {
 
 describe('セッションに基づく API', () => {
   it.each([getJoinRole, setPhoneRole, removePhoneRole])('ロール操作はセッションの ID を使う', async handler => {
+    getSession.mockResolvedValue({ user: discordUser });
     await handler(event);
-    expect(fetchBackend).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ query: { id: user.discordId } }));
+    expect(fetchBackend).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ query: { id: discordUser.discordId } }));
+  });
+  it.each([
+    [getJoinRole, true],
+    [setPhoneRole, { success: true }],
+    [removePhoneRole, { success: true }],
+  ])('開発用ログインのロール操作は Discord に問い合わせない', async (handler, result) => {
+    expect(await handler(event)).toEqual(result);
+    expect(fetchBackend).not.toHaveBeenCalled();
   });
   it.each([getJoinRole, setPhoneRole, removePhoneRole, joinAuth, socketToken, joinLocks, unlockJoin, setSetting, skywayToken])('未ログインは 401', async handler => {
     getSession.mockResolvedValue({});
