@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>voice-lab | 音声テスト</title>
+  <style>
+    :root { color-scheme: dark; font-family: "Yu Gothic UI", Meiryo, sans-serif; background:#101823; color:#e7eff8; }
+    * { box-sizing:border-box; }
+    body { max-width:1440px; margin:auto; padding:30px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:24px; }
+    h1 { margin:0; font-size:30px; letter-spacing:.02em; } h2 { margin:0; font-size:19px; }
+    .subtle { color:#9aafc5; font-size:13px; } header p { margin:6px 0 0; }
+    section { background:#192635; border:1px solid #304459; border-radius:12px; margin:18px 0; padding:20px; }
+    .toolbar, .statuses { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+    .toolbar { margin-bottom:14px; } .toolbar h2 { margin-right:auto; }
+    .badge { border:1px solid #3f596f; border-radius:20px; padding:7px 12px; font-size:13px; background:#213348; }
+    .good { color:#75e2bf; } .bad, #error { color:#ffb3a9; } #error { min-height:24px; margin:6px 0; }
+    input, select, button { font:inherit; color:inherit; border:1px solid #496277; background:#101d2c; border-radius:6px; padding:7px 9px; }
+    input[type=checkbox] { accent-color:#52d4b0; width:16px; height:16px; vertical-align:middle; }
+    input[type=number] { width:100%; min-width:80px; }
+    button { cursor:pointer; } button:hover { border-color:#75e2bf; } button:disabled { opacity:.4; cursor:default; }
+    button.primary { background:#216b5b; border-color:#3ea68d; } button.danger { color:#ffb3a9; }
+    table { border-collapse:collapse; width:100%; font-size:14px; } th { color:#9aafc5; font-size:12px; text-align:left; font-weight:normal; }
+    td, th { padding:12px 10px; border-bottom:1px solid #304459; } td:first-child { font-weight:600; }
+    .table-scroll { overflow-x:auto; } .editor-row td { padding:0; border-bottom:0; }
+    details { background:#142130; border-bottom:1px solid #304459; } summary { cursor:pointer; color:#9aafc5; padding:8px 12px; font-size:12px; }
+    .fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; padding:14px; }
+    .field { display:flex; flex-direction:column; gap:5px; font-weight:normal; font-size:12px; color:#a9bfd3; }
+    .field small { font-size:10px; color:#728fa9; font-weight:normal; }
+    .field div { display:flex; gap:5px; } .field select { min-width:0; width:100%; }
+    .field button { font-size:10px; padding:5px; flex:0 0 auto; white-space:nowrap; }
+    form { display:flex; gap:10px; flex-wrap:wrap; margin-top:18px; } form input { min-width:200px; }
+    .meter { display:inline-block; width:90px; height:5px; background:#304459; border-radius:3px; margin-left:12px; vertical-align:middle; overflow:hidden; }
+    .meter span { display:block; background:#63d7b5; height:100%; }
+    footer { color:#728fa9; font-size:12px; padding:4px; }
+    @media(max-width:700px) { body { padding:14px; } header { align-items:flex-start; flex-direction:column; } section { padding:12px; } }
+  </style>
+</head>
+<body>
+  <header><div><h1>voice-lab</h1><p class="subtle">音声テスト · ゲームデータと読み上げボット</p></div><span class="badge">開発用 · 127.0.0.1</span></header>
+  <div class="statuses"><span id="frontend" class="badge">frontend 待ち</span><span id="last-send" class="badge">未送信</span><label class="badge"><input id="sending" type="checkbox" checked> 送信 ON/OFF</label><span class="subtle">送信 OFF から約 5 秒でゲーム外</span></div>
+  <p id="error" role="alert"></p>
+  <section>
+    <div class="toolbar"><h2>聞こえ方の判定</h2><label>聞き手 <select id="listener" aria-label="聞き手"></select></label></div>
+    <div class="table-scroll"><table><thead><tr><th>話し手</th><th>距離</th><th>予想音量</th><th>受信</th><th>決め手</th></tr></thead><tbody id="decisions"></tbody></table></div>
+    <p class="subtle">実際の gain は、聞き手の相手ごとの音量と出力音量でも変化</p>
+    <p id="settings-error" class="bad"></p>
+  </section>
+  <section>
+    <div class="toolbar"><h2>プレイヤー</h2><span class="subtle">ボットのマイクは常時送信</span></div>
+    <div class="table-scroll"><table><thead><tr><th>ゲーマータグ</th><th>種類</th><th>送信に含める</th><th>ボットの状態</th><th>全体発言</th><th>操作</th></tr></thead><tbody id="players"></tbody></table></div>
+    <form id="add"><input name="name" placeholder="ゲーマータグ" aria-label="ゲーマータグ" required maxlength="100"><select name="kind" aria-label="種類"><option value="bot">ボット</option><option value="listener">聞き手</option></select><button class="primary">追加</button></form>
+  </section>
+  <footer>データ送信 200ms · 距離設定の取得 5 秒</footer>
+  <script>
+    const $ = selector => document.querySelector(selector);
+    const labels = {
+      'location.server':'サーバー', 'location.dimension':'ディメンション',
+      'location.coordinates.x':'座標 X', 'location.coordinates.y':'座標 Y', 'location.coordinates.z':'座標 Z',
+      telephone:'通話番号', hasTelephone:'スマホ所持', useMegaphone:'メガホン', useMicrophone:'マイク', mute:'ゲームのミュート指示', music:'音楽',
+      'transceiver.type':'トランシーバー', 'transceiver.number':'トランシーバーのチャンネル',
+      'radio.type':'ラジオ', 'radio.number':'ラジオのチャンネル',
+      'voiceOptions.rangeOutput':'送信範囲 %', 'voiceOptions.volumeOutput':'送信音量 %',
+      'voiceOptions.rangeInput':'受信範囲 %', 'voiceOptions.volumeInput':'受信音量 %'
+    };
+    const choices = {
+      'location.dimension':[[0,'オーバーワールド'],[1,'ネザー'],[2,'エンド'],[-1,'それ以外']],
+      music:[[0,'オフ'],[1,'オン'],[2,'ミュート']], mute:[[0,'なし'],[1,'切り替え'],[2,'ミュート'],[3,'解除']],
+      'transceiver.type':[[0,'受信'],[1,'送信'],[2,'持っていない']], 'radio.type':[[0,'受信'],[1,'発信'],[2,'持っていない']],
+      hasTelephone:[[0,'なし'],[1,'あり']], useMegaphone:[[0,'なし'],[1,'使用中']], useMicrophone:[[0,'なし'],[1,'使用中']]
+    };
+    const elements = new Map();
+    let busy = 0, polling = false;
+    function element(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
+    async function action(data) {
+      busy++;
+      try {
+        const response = await fetch('/api/action', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || '操作失敗');
+        $('#error').textContent = '';
+      } catch (error) { $('#error').textContent = error.message; }
+      finally { busy--; if (!busy) void refresh(); }
+    }
+    function check(label, change) { const node = element('input'); node.type = 'checkbox'; node.setAttribute('aria-label', label); node.onchange = () => change(node.checked); return node; }
+    function buildRow(row, fields) {
+      const name = row.player.name;
+      const tr = element('tr');
+      tr.dataset.name = name;
+      const include = check(name + ' 送信に含める', value => action({action:'include',name,value}));
+      const speaker = check(name + ' 全体発言', value => action({action:'speaker',name,value}));
+      const status = element('span');
+      const restart = element('button','再起動'); restart.onclick = () => action({action:'restart',name});
+      const remove = element('button','削除','danger'); remove.onclick = () => action({action:'remove',name});
+      const cells = [element('td',name),element('td',row.kind === 'bot' ? 'ボット' : '聞き手'),element('td'),element('td'),element('td'),element('td')];
+      cells[2].append(include); cells[3].append(status); if (row.kind === 'bot') cells[4].append(speaker);
+      cells[5].append(restart,document.createTextNode(' '),remove); tr.append(...cells);
+      const editRow = element('tr',undefined,'editor-row'), td = element('td'); td.colSpan = 6;
+      const details = element('details'); details.append(element('summary','状態の編集'));
+      const grid = element('div',undefined,'fields'), inputs = new Map();
+      fields.forEach(field => {
+        const label = element('label',undefined,'field'); label.append(element('span',labels[field]),element('small',field));
+        const wrap = element('div'), input = element('input'); input.type = 'number'; input.step = 'any'; input.setAttribute('aria-label',name + ' ' + field);
+        input.onchange = () => {
+          if (!input.value.trim() || !Number.isFinite(Number(input.value))) { $('#error').textContent = '有限数が必要'; return; }
+          void action({action:'update',name,field,value:Number(input.value)});
+        };
+        const options = choices[field];
+        let select;
+        if (options) {
+          select = element('select'); select.setAttribute('aria-label',name + ' ' + labels[field]);
+          options.forEach(([value,text]) => { const option = element('option',value + ' · ' + text); option.value = value; select.append(option); });
+          select.onchange = () => action({action:'update',name,field,value:Number(select.value)});
+          const toggle = element('button','数値'); toggle.type = 'button'; toggle.setAttribute('aria-label',name + ' ' + field + ' 数値切り替え');
+          toggle.onclick = () => { input.hidden = !input.hidden; select.hidden = !input.hidden; toggle.textContent = input.hidden ? '数値' : '選択'; };
+          input.hidden = options.some(([value]) => value === field.split('.').reduce((result,key) => result[key],row.player));
+          select.hidden = !input.hidden; toggle.textContent = input.hidden ? '数値' : '選択'; wrap.append(select,input,toggle);
+        } else wrap.append(input);
+        label.append(wrap); grid.append(label); inputs.set(field,{input,select});
+      });
+      details.append(grid); td.append(details); editRow.append(td); $('#players').append(tr,editRow);
+      const result = {tr,editRow,include,speaker,status,restart,inputs}; elements.set(name,result); return result;
+    }
+    function render(state) {
+      $('#frontend').textContent = state.frontend; $('#last-send').textContent = '送信: ' + state.lastSend;
+      $('#last-send').classList.toggle('good',state.lastSend === '成功');
+      $('#sending').checked = state.sending; $('#settings-error').textContent = state.settingsError;
+      const listener = $('#listener');
+      if (JSON.stringify([...listener.options].map(option => option.value)) !== JSON.stringify(state.rows.map(row => row.player.name))) {
+        listener.replaceChildren(...state.rows.map(row => { const option = element('option',row.player.name); option.value = row.player.name; return option; }));
+      }
+      listener.value = state.listener;
+      const names = new Set(state.rows.map(row => row.player.name));
+      for (const [name,nodes] of elements) if (!names.has(name)) { nodes.tr.remove(); nodes.editRow.remove(); elements.delete(name); }
+      state.rows.forEach(row => {
+        const nodes = elements.get(row.player.name) || buildRow(row,state.fields);
+        nodes.include.checked = row.included; nodes.speaker.checked = !!row.bot?.speaker;
+        nodes.speaker.disabled = row.bot?.status !== 'joined'; nodes.restart.hidden = row.bot?.status !== 'error';
+        nodes.status.textContent = row.bot ? ({starting:'起動中',joined:'参加中',error:'エラー'}[row.bot.status] + (row.bot.message ? ' · ' + row.bot.message : '')) : 'データのみ';
+        nodes.status.className = row.bot?.status === 'joined' ? 'good' : row.bot?.status === 'error' ? 'bad' : 'subtle';
+        for (const [field,{input,select}] of nodes.inputs) {
+          const value = field.split('.').reduce((result,key) => result[key],row.player);
+          if (document.activeElement !== input) input.value = value;
+          if (select && document.activeElement !== select) {
+            const old = select.querySelector('[data-custom]'); if (old) old.remove();
+            if (!choices[field].some(([option]) => option === value)) {
+              const option = element('option',value + ' · その他'); option.value = value; option.dataset.custom = 'true'; select.append(option);
+            }
+            select.value = value;
+          }
+        }
+      });
+      $('#decisions').replaceChildren(...state.decisions.map(item => {
+        const row = element('tr');
+        row.append(element('td',item.name),element('td',item.distance === null ? '—' : item.distance.toFixed(2)));
+        const volume = element('td',item.volume === null ? '計算範囲外' : item.volume.toFixed(3) + ' / ' + (item.volume * 100).toFixed(1) + '%');
+        const meter = element('span',undefined,'meter'), fill = element('span'); fill.style.width = Math.max(0,Math.min(100,item.volume * 100)) + '%'; meter.append(fill); volume.append(meter);
+        row.append(volume,element('td',item.subscribe ? '受信する' : '受信なし',item.subscribe ? 'good' : 'subtle'),element('td',(item.step === null ? '' : '手順 ' + item.step + ' · ') + item.label)); return row;
+      }));
+    }
+    async function refresh() {
+      if (polling || busy) return;
+      polling = true;
+      try { const response = await fetch('/api/state'); if (!response.ok) throw new Error(); const state = await response.json(); if (!busy) render(state); }
+      catch { $('#error').textContent = '操作画面の接続切断'; }
+      finally { polling = false; }
+    }
+    $('#sending').onchange = event => action({action:'sending',value:event.target.checked});
+    $('#listener').onchange = event => action({action:'listener',name:event.target.value});
+    $('#add').onsubmit = event => { event.preventDefault(); const data = new FormData(event.target); void action({action:'add',name:data.get('name'),kind:data.get('kind')}); };
+    void refresh(); setInterval(refresh,750);
+  </script>
+</body>
+</html>

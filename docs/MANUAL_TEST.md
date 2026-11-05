@@ -82,6 +82,33 @@ pnpm --filter @svoice/backend fake-game --replay 'E:\captures\capture.jsonl' --r
 
 `static` は同じ地点、`walk` は seed で再現できるランダム移動。`--replay` は `E:\dev\SyakasabaVC\tools\capture-player-data.mjs` の `.jsonl` を受信時刻の間隔で繰り返す。記録は新形式のプレイヤー配列を含むものを使う。旧形式のプレイヤーは backend で除外される。`--scenario` / `--replay` は標準入力を読まない。
 
+## voice-lab（Web 操作と読み上げボット）
+
+通常の `pnpm dev` を停止した状態で起動する。偽ゲームサーバーと voice-lab は同時に使わない。
+
+```powershell
+cd E:\dev\SyakasabaVC
+pnpm dev:lab
+```
+
+操作画面は http://127.0.0.1:3110/ 。アプリは http://localhost:3100/ で、開発用ログインから Alice または Bob で参加する。操作画面の「聞き手」に同じ名前を選ぶ。Bot1〜Bot3 はヘッドレス Chromium で参加し、名前の読み上げを繰り返す。読み上げを生成できない場合は合成音声に切り替わり、操作画面とコンソールに表示する。
+
+「状態の編集」で `PlayerData` の名前以外の全項目を変更できる。選択項目の「数値」で任意の有限数に切り替えられる。「送信に含める」を外すとその人だけゲーム外。「送信 ON/OFF」を OFF にすると、アプリでは約 5 秒後に全員がゲーム外になる。判定の表は操作した送信対象から計算するため、OFF の直後からゲーム外の予想になる。
+
+ボットのマイクは常時送信し、ゲームの `mute` 指示でもミュートを解除する。「全体発言」はサーバー・距離などの条件によらず聞こえる。ボットの切断時は「再起動」で参加し直す。行の追加・削除でボットと聞き手を増減できる。実際の音量は、アプリ側の相手ごとの音量と出力音量でも変わる。
+
+既定の聞き手は `DEV_PLAYERS=Alice,Bob`、ボットは `LAB_BOTS=Bot1,Bot2,Bot3`。操作画面のポートは `VOICE_LAB_PORT`（既定 3110）。`pnpm dev` と同様に `.env.development` を使う。Ctrl+C でサーバーとボットを終了する。
+
+backend と frontend だけが起動済みの場合の単体起動:
+
+```powershell
+cd E:\dev\SyakasabaVC
+$env:ENV_FILE = 'E:\dev\SyakasabaVC\backend\.env.development'
+pnpm --filter @svoice/backend voice-lab --bots Bot1,Bot2 --listeners Alice,Bob
+```
+
+実装は `E:\dev\SyakasabaVC\backend\scripts\voice-lab.ts` と `E:\dev\SyakasabaVC\backend\scripts\voiceLab\`。開発用ログインが無効の場合、ボットの状態は「開発用ログイン無効」になる。
+
 ## 実際の Discord を使うモード
 
 上の開発用ポートとルーム名を使い、次の設定を追加する。Discord のロールの付与・解除は実際に行われる。
