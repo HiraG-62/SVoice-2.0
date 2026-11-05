@@ -10,6 +10,7 @@ import { createSocketServer, startSocket } from '../src/socketServer';
 import { config, player } from './fixtures';
 
 type ClientSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
+const LISTEN_TIMEOUT_MS = 1000;
 const clients: ClientSocket[] = [];
 let server: ReturnType<typeof createSocketServer>;
 let url: string;
@@ -57,6 +58,29 @@ afterEach(async () => {
 });
 
 describe('socketServer', () => {
+  it('listen 直後に close されたら reject する', async () => {
+    const pending = createSocketServer({ config, getData: () => [] });
+    const ready = startSocket(pending, 0);
+    const rejected = expect(ready).rejects.toThrow('listen 前に停止');
+    pending.server.close();
+    try { await rejected; }
+    finally { await new Promise<void>(resolve => pending.io.close(() => resolve())); }
+  }, LISTEN_TIMEOUT_MS);
+
+  it('listen 成功後は待機用リスナーを外し、close しても成功のまま', async () => {
+    const pending = createSocketServer({ config, getData: () => [] });
+    const listeners = { error: pending.server.listeners('error'), close: pending.server.listeners('close'),
+      listening: pending.server.listeners('listening') };
+    const ready = startSocket(pending, 0);
+    try {
+      await ready;
+      for (const event of ['error', 'close', 'listening'] as const) {
+        expect(pending.server.listeners(event)).toEqual(listeners[event]);
+      }
+    } finally { await new Promise<void>(resolve => pending.io.close(() => resolve())); }
+    await expect(ready).resolves.toBeUndefined();
+  });
+
   it('debug の保存成功と制限超過を ack で返す', async () => {
     const socket = await connect('Player', false);
     const debug = (data: unknown) => new Promise<{ ok: boolean }>(resolve => socket.emit('debug', data, resolve));

@@ -186,15 +186,19 @@ async function tlsChecks(directory, result) {
       return status;
     },
     startupFailures: async () => {
+      result.startupFailureExitMs = {};
       for (const port of Object.values(PORTS)) {
         await configuration(directory, false);
-        const blocker = net.createServer();
+        const blocker = net.createServer(socket => socket.destroy());
         await listen(blocker, { port, host: '::' });
         try {
-          await withProcess(directory, {}, async (_output, child, _stop, completion) => {
+          const started = Date.now();
+          await withProcess(directory, {}, async (output, _child, _stop, completion) => {
             const code = await deadline(completion, `起動失敗で終了しない :${port}`, STARTUP_FAILURE_TIMEOUT_MS);
+            result.startupFailureExitMs[port] = Date.now() - started;
             assert.notEqual(code, 0);
             assert.notEqual(code, null);
+            assert.doesNotMatch(await output(), /終了処理のタイムアウト/);
           }, [port], true);
         } finally { await new Promise(resolve => blocker.close(resolve)); }
         await assertPortsFree(Object.values(PORTS));

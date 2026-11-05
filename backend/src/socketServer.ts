@@ -107,12 +107,23 @@ export function createSocketServer({ config, getData, logsDirectory = path.join(
 }
 
 export function startSocket(socketServer: ReturnType<typeof createSocketServer>, port = SOCKET_PORT): Promise<void> {
+  const { server } = socketServer;
   return new Promise((resolve, reject) => {
-    socketServer.server.once('error', reject);
-    socketServer.server.listen(port, () => {
-      socketServer.server.off('error', reject);
+    const cleanup = () => {
+      server.off('error', onError);
+      server.off('close', onClose);
+      server.off('listening', onListening);
+    };
+    const onError = (error: Error) => { cleanup(); reject(error); };
+    const onClose = () => onError(new Error('listen 前に停止'));
+    const onListening = () => {
+      cleanup();
       console.log(`WebSocket server running on port ${port}`);
       resolve();
-    });
+    };
+    server.once('error', onError);
+    server.once('close', onClose);
+    server.once('listening', onListening);
+    server.listen(port);
   });
 }

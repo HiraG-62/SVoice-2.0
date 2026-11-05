@@ -172,11 +172,21 @@ export function listenDiscordServers(servers: ReturnType<typeof createDiscordSer
   return Promise.all(([
     [servers.httpServer, config.DISCORD_HTTP_PORT], [servers.server, config.DISCORD_TLS_PORT],
   ] as const).map(([server, port]) => new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, () => {
-      server.off('error', reject);
+    const cleanup = () => {
+      server.off('error', onError);
+      server.off('close', onClose);
+      server.off('listening', onListening);
+    };
+    const onError = (error: Error) => { cleanup(); reject(error); };
+    const onClose = () => onError(new Error('listen 前に停止'));
+    const onListening = () => {
+      cleanup();
       console.log(`Discord server running on port ${port}`);
       resolve();
-    });
+    };
+    server.once('error', onError);
+    server.once('close', onClose);
+    server.once('listening', onListening);
+    server.listen(port);
   })));
 }

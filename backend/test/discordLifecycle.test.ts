@@ -1,12 +1,14 @@
 import { once } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createDiscordService, startDiscordServer } from '../src/discordBot';
+import { createDiscordApp, createDiscordServers, createDiscordService, listenDiscordServers, startDiscordServer } from '../src/discordBot';
 import { config } from './fixtures';
 
+const LISTEN_TIMEOUT_MS = 1000;
 const mocks = vi.hoisted(() => ({ login: vi.fn(), ready: vi.fn(), joinVoiceChannel: vi.fn(), fetchGuild: vi.fn() }));
 vi.mock('@discordjs/voice', () => ({ joinVoiceChannel: mocks.joinVoiceChannel }));
 vi.mock('discord.js', async () => {
@@ -36,7 +38,51 @@ vi.mock('discord.js', async () => {
 
 afterEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); vi.useRealTimers(); });
 
+describe('内部 API の listen', () => {
+  const listenConfig = { ...config, DISCORD_ENABLED: false, DISCORD_HTTP_PORT: 0, DISCORD_TLS_PORT: 0 };
+  const createServers = () => createDiscordServers(createDiscordApp({ config: listenConfig,
+    fetchGuild: async () => { throw new Error('Discord 無効'); }, nextBot: () => {} }), listenConfig);
+  const closeServer = (server: Server) => new Promise<void>(resolve => server.close(() => resolve()));
+
+  it.each(['httpServer', 'server'] as const)('%s が listen 直後に close されたら reject する', async (name) => {
+    const servers = createServers();
+    const ready = listenDiscordServers(servers, listenConfig);
+    const rejected = expect(ready).rejects.toThrow('listen 前に停止');
+    servers[name].close();
+    try { await rejected; }
+    finally { await Promise.all(Object.values(servers).map(closeServer)); }
+  }, LISTEN_TIMEOUT_MS);
+
+  it('listen 成功後は待機用リスナーを外し、close しても成功のまま', async () => {
+    const servers = createServers();
+    const listeners = Object.values(servers).map(server => ({
+      error: server.listeners('error'), close: server.listeners('close'), listening: server.listeners('listening'),
+    }));
+    const ready = listenDiscordServers(servers, listenConfig);
+    try {
+      await ready;
+      Object.values(servers).forEach((server, index) => {
+        for (const event of ['error', 'close', 'listening'] as const) {
+          expect(server.listeners(event)).toEqual(listeners[index]![event]);
+        }
+      });
+    } finally { await Promise.all(Object.values(servers).map(closeServer)); }
+    await expect(ready).resolves.toEqual([undefined, undefined]);
+  });
+});
+
 describe('Discord 起動', () => {
+  it('listen 直後に内部 API が close されても終了処理が完了する', async () => {
+    const servers: Server[] = [];
+    const service = createDiscordService({ ...config, DISCORD_ENABLED: false,
+      DISCORD_HTTP_PORT: 0, DISCORD_TLS_PORT: 0 }, () => [], { onServer: server => { servers.push(server); } });
+    const rejected = expect(service.ready).rejects.toThrow('listen 前に停止');
+    servers.forEach(server => server.close());
+    await service.close();
+    await rejected;
+    expect(servers.every(server => !server.listening)).toBe(true);
+  }, LISTEN_TIMEOUT_MS);
+
   it('ログイン中も内部 API が listen し、停止では Bot を破棄して両ポートを解放する', async () => {
     const tokensPath = path.resolve('dummy-tokens.json');
     const originalRead = fs.readFileSync;
