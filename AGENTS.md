@@ -19,7 +19,7 @@
 - 音量計算と受信判定（`frontend/services/volume.ts`）の固定テストの期待値は、I1 に関わるため変えない
   - frontend の `typecheck` は `nuxi typecheck`（vue-router の Volar プラグインの解決失敗の警告が出るが、結果には影響しない）。frontend の `build` / `typecheck` は `frontend/.env` を読み込むので、値を出力しない
 - backend は `backend/` を基準に `.env`・`env/tokens.json`（実際の Bot トークン）・`key/` を読む（cwd には依存しない）。動作確認は、ルートの `pnpm dev`（`backend/.env.development`・`frontend/.env.development` を自動で使う）でそのまま起動して行う（下の「制約」を参照）
-- ローカルでの手動確認手順は `docs/MANUAL_TEST.md`。ゲームサーバーの代わりに `pnpm --filter @svoice/backend fake-game <タグ...>`（`--scenario` / `--replay` あり）を使う。
+- ローカルでの手動確認手順は `docs/MANUAL_TEST.md`。ゲームサーバーの代わりに `pnpm --filter @svoice/backend fake-game <タグ...>`（`--scenario` / `--replay` あり）を使う。聞こえ方を耳で試すときは `pnpm dev:lab`（偽ゲームデータを操作する画面 `http://127.0.0.1:3110/` と、名前を読み上げ続けるボット。`backend/scripts/voiceLab/`）を使う。
 
 ## 制約
 - **ユーザーの許可なく、作業用のフォルダー（git worktree、リポジトリのコピーなど）を作らない。** 作業と動作確認は `E:\dev\SyakasabaVC` の作業ツリーで行う。動作確認は、プロジェクトをそのまま（ルートで `pnpm dev`、`.env.development` の値のまま）起動して使う。ポートや設定を上書きして別に起動しない。すでに開発サーバーが動いていれば、それを使ってよい

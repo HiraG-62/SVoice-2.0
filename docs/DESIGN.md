@@ -138,6 +138,7 @@ frontend（開発は `frontend/.env`・`.env.development`。キーの一覧と�
 
 - 実際の Discord OAuth・Bot・ロールの付け外しは、ローカルでは検証していない（開発用ログインと `DISCORD_ENABLED=false` で代替）。
 - 手動確認の手順は `docs/MANUAL_TEST.md`。
+- 聞こえ方の手動確認は voice-lab（`pnpm dev:lab`。`backend/scripts/voiceLab/`、設計は `docs/specs/voice-lab.md`）。偽ゲームデータの全項目を `http://127.0.0.1:3110/` で編集でき、ヘッドレス Chromium のボットが名前の読み上げを送り続ける（ゲームの `mute` は無視）。判定の予想は `frontend/services/volume.ts` をそのまま使う。開発専用で、アプリと exe には含まれない。
 
 ## 版の履歴と旧リポジトリ
 
