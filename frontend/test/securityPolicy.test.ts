@@ -53,22 +53,22 @@ describe('認証メッセージ', () => {
   it('参加認証の結果を区別する', () => {
     expect(joinAuthMessage({ ok: true, locked: false, remaining: 5 })).toBe('');
     expect(joinAuthMessage({ ok: false, locked: false, remaining: 4 })).toBe('パスワードが違います（残り 4 回）');
-    expect(joinAuthMessage({ ok: false, locked: true, remaining: 0 })).toBe('ロック中。運営に連絡');
+    expect(joinAuthMessage({ ok: false, locked: true, remaining: 0 })).toBe('ロックされています。運営に連絡してください。');
   });
   it('OAuth の失敗理由を区別する', () => {
-    expect(loginErrorMessage('discord_starting')).toBe('Discord 接続待ち。少し待って再ログイン');
+    expect(loginErrorMessage('discord_starting')).toBe('Discord接続待ちです。時間を空けて再ログインしてください。');
     expect(loginErrorMessage('nickname_missing')).toContain('ニックネーム');
     expect(loginErrorMessage('member_not_found')).toBe('Discordサーバーに参加していません。');
     expect(loginErrorMessage('internal_error')).toContain('時間を空けて');
     expect(loginErrorMessage(undefined)).toBe('');
   });
   it.each([
-    [{ statusCode: 503, data: { error: 'discord_starting' } }, 'Discord 接続待ち。少し待って再読み込み'],
-    [{ status: 503, data: { error: 'discord_starting' } }, 'Discord 接続待ち。少し待って再読み込み'],
-    [{ statusCode: 500, data: { error: 'discord_starting' } }, '参加ロールの確認失敗'],
-    [{ statusCode: 503, data: { error: 'discord_unavailable' } }, '参加ロールの確認失敗'],
-    [new Error('offline'), '参加ロールの確認失敗'],
-    [null, '参加ロールの確認失敗'],
+    [{ statusCode: 503, data: { error: 'discord_starting' } }, 'Discord接続待ちです。時間を空けて再読み込みしてください。'],
+    [{ status: 503, data: { error: 'discord_starting' } }, 'Discord接続待ちです。時間を空けて再読み込みしてください。'],
+    [{ statusCode: 500, data: { error: 'discord_starting' } }, '参加ロールの確認に失敗しました。'],
+    [{ statusCode: 503, data: { error: 'discord_unavailable' } }, '参加ロールの確認に失敗しました。'],
+    [new Error('offline'), '参加ロールの確認に失敗しました。'],
+    [null, '参加ロールの確認に失敗しました。'],
   ])('参加ロールのエラーを区別する: %j', (error, expected) => {
     expect(joinRoleErrorMessage(error)).toBe(expected);
   });

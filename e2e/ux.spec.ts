@@ -74,8 +74,8 @@ for (const [width, device] of [[1280, 'desktop'], [390, 'mobile']] as const) {
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('※OS の既定の出力を使用', { exact: true })).toBeVisible();
-    await dialog.getByRole('button', { name: '入力音量の上限 200 → 2000。声が小さいとき用', exact: true }).click();
-    await expect(page.getByRole('tooltip').filter({ hasText: '声が小さいとき用' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'マイク音量の上限を上げます。声が小さすぎるとき用', exact: true }).click();
+    await expect(page.getByRole('tooltip').filter({ hasText: '声が小さすぎるとき用' })).toBeVisible();
     const bounds = await dialog.locator('.v-overlay__content').boundingBox();
     expect(bounds).not.toBeNull();
     expect(bounds!.width).toBeLessThanOrEqual(width);

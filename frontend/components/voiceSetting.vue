@@ -19,7 +19,7 @@ const micMax = computed(() => isExtendsMic.value ? EXTENDED_LEVEL_MAX : NORMAL_L
 const phoneMax = NORMAL_LEVEL_MAX, micMin = 0, phoneMin = 0, micIndicatorMin = 0;
 const micIndicatorMax = DEFAULT_LEVEL / 2;
 const micIndicatorColor = computed(() => sliderColor(micIndicator.value, micIndicatorMax));
-const micExtensionHint = `入力音量の上限 ${NORMAL_LEVEL_MAX} → ${EXTENDED_LEVEL_MAX}。声が小さいとき用`;
+const micExtensionHint = 'マイク音量の上限を上げます。声が小さすぎるとき用';
 const changePhoneVolume = () => audio.setPhoneLevel(Math.min(phoneLevel.value, phoneMax));
 const changeMicVolume = () => audio.setMicLevel(Math.min(micLevel.value, micMax.value));
 const clickExtendsMic = () => { isExtendsMic.value = !isExtendsMic.value; changeMicVolume(); };
