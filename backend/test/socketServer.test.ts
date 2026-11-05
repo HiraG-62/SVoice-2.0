@@ -17,6 +17,7 @@ let url: string;
 let logsDirectory: string;
 let getData: ReturnType<typeof vi.fn<() => typeof player[] | null>>;
 let clock: Date;
+let log: ReturnType<typeof vi.fn<(message: string) => void>>;
 
 function once<T>(socket: ClientSocket, event: string): Promise<T> {
   return new Promise((resolve) => socket.once(event as 'joined', resolve as (data: (string | null)[]) => void));
@@ -38,7 +39,8 @@ beforeEach(async () => {
   logsDirectory = mkdtempSync(path.join(tmpdir(), 'svoice-socket-test-'));
   getData = vi.fn(() => [player]);
   clock = new Date(2026, 10, 3, 12);
-  server = createSocketServer({ config: { ...config, DATA_DIR: logsDirectory }, getData, now: () => clock, logger: { log: vi.fn() } });
+  log = vi.fn();
+  server = createSocketServer({ config: { ...config, DATA_DIR: logsDirectory }, getData, now: () => clock, logger: { log } });
   await startSocket(server, 0);
   const address = server.server.address();
   if (!address || typeof address === 'string') throw new Error('ポート取得失敗');
@@ -58,6 +60,107 @@ afterEach(async () => {
 });
 
 describe('socketServer', () => {
+  it('接続・参加・退出・切断を順に記録し、join と exit の重複では記録しない', async () => {
+    const socket = await connect('Player');
+    const id = socket.id!;
+    const peer = server.io.sockets.sockets.get(id)!;
+    const joined = once(socket, 'joined');
+    socket.emit('join', 'Forged');
+    await joined;
+    const exited = new Promise<void>(resolve => peer.once('exit', () => resolve()));
+    socket.emit('exit');
+    await exited;
+    const exitedAgain = new Promise<void>(resolve => peer.once('exit', () => resolve()));
+    socket.emit('exit');
+    await exitedAgain;
+    const disconnected = new Promise<void>(resolve => peer.once('disconnect', () => resolve()));
+    socket.disconnect();
+    await disconnected;
+    expect(log.mock.calls).toEqual([
+      [`接続: Player ${id}`],
+      ['参加: Player（参加中 1 人）'],
+      ['退出: Player（退出操作、参加中 0 人）'],
+      [`切断: Player ${id} client namespace disconnect`],
+    ]);
+  });
+
+  it('未参加の切断では退出を記録しない', async () => {
+    const socket = await connect('Player', false, false);
+    const id = socket.id!;
+    const peer = server.io.sockets.sockets.get(id)!;
+    const disconnected = new Promise<void>(resolve => peer.once('disconnect', () => resolve()));
+    socket.disconnect();
+    await disconnected;
+    expect(log.mock.calls).toEqual([
+      [`接続: Player ${id}`], [`切断: Player ${id} client namespace disconnect`],
+    ]);
+  });
+
+  it('再参加と参加中の切断を記録し、接続数と切断理由を反映する', async () => {
+    const first = await connect('Player');
+    const second = await connect('Player');
+    const peer = server.io.sockets.sockets.get(first.id!)!;
+    log.mockClear();
+    first.emit('exit');
+    const joined = once(first, 'joined');
+    first.emit('join', 'Player');
+    await joined;
+    const disconnected = new Promise<void>(resolve => peer.once('disconnect', () => resolve()));
+    const id = first.id!;
+    peer.conn.close();
+    await disconnected;
+    expect(log.mock.calls).toEqual([
+      ['退出: Player（退出操作、参加中 1 人）'],
+      ['参加: Player（参加中 2 人）'],
+      ['退出: Player（forced close、参加中 1 人）'],
+      [`切断: Player ${id} forced close`],
+    ]);
+    expect(second.connected).toBe(true);
+  });
+
+  it('全体発言は状態が変わったときだけ記録し、退出時の終了も記録する', async () => {
+    const socket = await connect('Speaker');
+    log.mockClear();
+    for (const event of ['onSpeaker', 'onSpeaker', 'offSpeaker', 'offSpeaker', 'onSpeaker'] as const) {
+      socket.emit(event);
+      const joined = once(socket, 'joined');
+      socket.emit('join', 'Speaker');
+      await joined;
+    }
+    const peer = server.io.sockets.sockets.get(socket.id!)!;
+    const exited = new Promise<void>(resolve => peer.once('exit', () => resolve()));
+    socket.emit('exit');
+    await exited;
+    expect(log.mock.calls).toEqual([
+      ['全体発言開始: Speaker'], ['全体発言終了: Speaker'],
+      ['全体発言開始: Speaker'], ['全体発言終了: Speaker'],
+      ['退出: Speaker（退出操作、参加中 0 人）'],
+    ]);
+  });
+
+  it('ログ出力の失敗で参加・全体発言・通知・退出を止めない', async () => {
+    log.mockImplementation(() => { throw new Error('出力不可'); });
+    const socket = await connect('Player');
+    const enabled = once(socket, 'setAdminSpeaker');
+    socket.emit('onSpeaker');
+    expect(await enabled).toEqual(['Player']);
+    const changed = once(socket, 'changeSetting');
+    socket.emit('changeSetting');
+    await changed;
+    const peer = server.io.sockets.sockets.get(socket.id!)!;
+    const exited = new Promise<void>(resolve => peer.once('exit', () => resolve()));
+    socket.emit('exit');
+    await exited;
+    expect(peer.rooms.has('joined')).toBe(false);
+  });
+
+  it('ゲーマータグの制御文字を空白に置き換え、ログを 1 行にする', async () => {
+    const socket = await connect('Alice\r\nBob\u2028');
+    expect(log.mock.calls).toEqual([
+      [`接続: Alice  Bob  ${socket.id}`], ['参加: Alice  Bob （参加中 1 人）'],
+    ]);
+  });
+
   it('listen 直後に close されたら reject する', async () => {
     const pending = createSocketServer({ config, getData: () => [] });
     const ready = startSocket(pending, 0);
@@ -87,6 +190,10 @@ describe('socketServer', () => {
     expect(await debug('あ'.repeat(30_000))).toEqual({ ok: false });
     for (let i = 0; i < 5; i++) expect(await debug({ i })).toEqual({ ok: true });
     expect(await debug({ rejected: true })).toEqual({ ok: false });
+    expect(log.mock.calls.filter(([message]) => message.startsWith('debug 保存:'))).toHaveLength(5);
+    expect(log.mock.calls.filter(([message]) => message.startsWith('debug 制限超過:'))).toEqual([
+      [`debug 制限超過: Player ${socket.id}`], [`debug 制限超過: Player ${socket.id}`],
+    ]);
     expect(readFileSync(path.join(logsDirectory, 'logs', '2026-11-03.jsonl'), 'utf8').trim().split('\n')).toHaveLength(5);
   });
   it('debug の書き込み失敗を ack で返す', async () => {
@@ -94,6 +201,7 @@ describe('socketServer', () => {
     vi.spyOn(fs, 'appendFileSync').mockImplementation(() => { throw new Error('保存不可'); });
     const result = await new Promise(resolve => socket.emit('debug', {}, resolve));
     expect(result).toEqual({ ok: false });
+    expect(log).not.toHaveBeenCalledWith('debug 保存: Player');
   });
   it('ログ整理が失敗しても保存済みの debug は成功を返す', async () => {
     const socket = await connect('Player', false);
@@ -124,6 +232,9 @@ describe('socketServer', () => {
     expect(await barrier).toEqual([]);
     await once(second, 'playerData');
     expect(denied).not.toHaveBeenCalled();
+    for (const event of ['onSpeaker', 'offSpeaker', 'changeSetting', 'kick']) {
+      expect(log).toHaveBeenCalledWith(`操作拒否: ${event} First ${first.id}`);
+    }
   });
 
   it('join 前と exit 後は配信もキックの対象にもしない', async () => {
@@ -160,6 +271,7 @@ describe('socketServer', () => {
     const received = [once(first, 'kicked'), once(second, 'kicked')];
     admin.emit('kick', 'Player');
     await Promise.all(received);
+    expect(log).toHaveBeenCalledWith('キック: Admin → Player（2 接続）');
   });
 
   it('発言中に権限が外れても offSpeaker を受け付ける', async () => {
@@ -236,6 +348,7 @@ describe('socketServer', () => {
     const received = [once(first, 'changeSetting'), once(second, 'changeSetting')];
     first.emit('changeSetting');
     await Promise.all(received);
+    expect(log).toHaveBeenCalledWith('設定変更の通知: First');
   });
 
   it('kick を対象だけに送る', async () => {

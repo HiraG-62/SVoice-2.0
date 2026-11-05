@@ -50,6 +50,11 @@ backend の起動は `backend/src/index.ts` が設定（`config.ts`）を読み�
 - 管理者以外の管理操作は無視して 1 行ログに出す。
 - 保存したデバッグ情報は `pnpm --filter @svoice/backend debug-log [--tag <ゲーマータグ>] [--date YYYY-MM-DD]` で読む。
 
+### サーバーログ
+- stdout / stderr に 1 行ずつ出す。本番の exe では各行の先頭にローカル時刻を付け（`tools/package/logTime.mjs`）、WinSW が `data/service-logs/` に保存する。読み方は `docs/DEPLOY.md`「確認」。
+- 障害調査のため、出来事をゲーマータグ付きで出す: 接続・参加・退出（理由と参加中の人数）・切断（Socket.IO の切断理由）、キック、全体発言の開始・終了、設定変更の通知、ゲームデータの受信開始・停止、参加認証の成否とロック、Discord ログイン、距離設定の保存、参加ロックの解除。文言は `docs/specs/event-logs.md`。
+- Discord ID は末尾 4 桁だけを出す。パスワード・トークン・シークレットは出さない。
+
 ### `src/internalApi.ts` と `src/discord/`
 - 内部 API は Bot のログインを待たずに listen する。ログイン中の Discord 操作は 503 `discord_starting` を返す。参加認証のパスワード照合・ロックとロック管理は利用できる。
 - `discord/bots.ts`: `tokens.json`（`{ "tokens": [...] }`）の Bot を順にログインする（1 体あたり最大 5 回リトライ）。`clientReady` をログイン前に登録する。Bot が 0 体やファイル不正でもプロセスは落ちず、Discord 機能が無効のときと同じ応答になる。

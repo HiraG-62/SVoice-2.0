@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 import { verifySocketToken } from '@svoice/shared/socket-token';
 import { issueSkywayToken } from '../server/utils/skywayToken';
@@ -41,8 +41,54 @@ beforeEach(() => {
   vi.clearAllMocks();
   getSession.mockResolvedValue({ user });
 });
+afterEach(() => { vi.restoreAllMocks(); });
 
 describe('セッションに基づく API', () => {
+  it('距離設定は保存成功時だけ管理者のタグを記録する', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    getSession.mockResolvedValue({ user: { ...user, discordAuth: true } });
+    readBody.mockResolvedValue({});
+    await expect(setSetting(event)).rejects.toMatchObject({ statusCode: 400 });
+    expect(log).not.toHaveBeenCalled();
+    readBody.mockResolvedValue(defaults);
+    vi.mocked(fs.writeFileSync).mockImplementationOnce(() => { throw new Error('保存不可'); });
+    await expect(setSetting(event)).rejects.toThrow('保存不可');
+    expect(log).not.toHaveBeenCalled();
+    await setSetting(event);
+    expect(log.mock.calls).toEqual([['距離設定の保存: Alice Bob']]);
+  });
+
+  it('ロック解除は backend 成功時だけ ID の末尾 4 桁を記録する', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    getSession.mockResolvedValue({ user: { ...user, discordAuth: true } });
+    const id = '987654321012345678';
+    readBody.mockResolvedValue({ id });
+    fetchBackend.mockRejectedValueOnce(new Error('解除不可'));
+    await expect(unlockJoin(event)).rejects.toThrow('解除不可');
+    expect(log).not.toHaveBeenCalled();
+    fetchBackend.mockResolvedValueOnce({ success: false });
+    expect(await unlockJoin(event)).toEqual({ success: false });
+    expect(log).not.toHaveBeenCalled();
+    fetchBackend.mockResolvedValueOnce({ success: true });
+    expect(await unlockJoin(event)).toEqual({ success: true });
+    expect(log.mock.calls).toEqual([['参加ロック解除: Alice Bob → ...5678']]);
+    expect(JSON.stringify(log.mock.calls)).not.toContain(id);
+    expect(JSON.stringify(log.mock.calls)).not.toContain(user.discordId);
+  });
+
+  it('ログの制御文字を空白にし、出力失敗でも保存と解除は成功する', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    getSession.mockResolvedValue({ user: { ...user, gamerTag: 'Alice\nBob', discordAuth: true } });
+    readBody.mockResolvedValue(defaults);
+    await setSetting(event);
+    expect(log).toHaveBeenCalledWith('距離設定の保存: Alice Bob');
+    log.mockImplementation(() => { throw new Error('出力不可'); });
+    await expect(setSetting(event)).resolves.toBeUndefined();
+    readBody.mockResolvedValue({ id: user.discordId });
+    fetchBackend.mockResolvedValueOnce({ success: true });
+    await expect(unlockJoin(event)).resolves.toEqual({ success: true });
+  });
+
   it.each([getJoinRole, setPhoneRole, removePhoneRole])('ロール操作はセッションの ID を使う', async handler => {
     getSession.mockResolvedValue({ user: discordUser });
     await handler(event);

@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createGameReceiver, validatePlayerData } from '../src/gameReceiver';
+import { createGameReceiver, PLAYER_IDLE_TIMEOUT_MS, validatePlayerData } from '../src/gameReceiver';
 import { player } from './fixtures';
 
 const receivers: ReturnType<typeof createGameReceiver>[] = [];
@@ -16,6 +16,47 @@ afterEach(() => {
 });
 
 describe('gameReceiver', () => {
+  it('受信開始・停止・再開だけを記録し、初回受信前と拒否時には記録しない', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const log = vi.fn();
+    const receiver = createGameReceiver({ gameApiSecret: 'secret', logger: { log } });
+    receivers.push(receiver);
+    receiver.resetIdleTimer();
+    vi.advanceTimersByTime(PLAYER_IDLE_TIMEOUT_MS);
+    expect(log).not.toHaveBeenCalled();
+    await request(receiver.app).post('/').send([player]).expect(401);
+    expect(log).not.toHaveBeenCalled();
+    const receive = (players: unknown[]) => request(receiver.app).post('/').set('x-api-secret', 'secret').send(players).expect(200);
+    await receive([player]);
+    vi.advanceTimersByTime(PLAYER_IDLE_TIMEOUT_MS - 1);
+    await receive([]);
+    expect(log.mock.calls).toEqual([['ゲームデータ受信開始: 1 人']]);
+    vi.advanceTimersByTime(PLAYER_IDLE_TIMEOUT_MS);
+    expect(receiver.getData()).toBeNull();
+    vi.advanceTimersByTime(PLAYER_IDLE_TIMEOUT_MS);
+    await receive([player, { ...player, name: 'Second' }]);
+    expect(log.mock.calls).toEqual([
+      ['ゲームデータ受信開始: 1 人'],
+      ['ゲームデータ受信停止: 5 秒受信なし'],
+      ['ゲームデータ受信開始: 2 人'],
+    ]);
+  });
+
+  it('受け付けたプレイヤー数を記録し、ログ出力失敗でも受信と期限切れを処理する', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const log = vi.fn();
+    const receiver = createGameReceiver({ logger: { log } });
+    receivers.push(receiver);
+    await request(receiver.app).post('/').send([{}, player]).expect(200);
+    expect(log).toHaveBeenCalledWith('ゲームデータ受信開始: 1 人');
+    vi.advanceTimersByTime(PLAYER_IDLE_TIMEOUT_MS);
+    log.mockImplementation(() => { throw new Error('出力不可'); });
+    await request(receiver.app).post('/').send([]).expect(200, { success: true });
+    expect(receiver.getData()).toEqual([]);
+    expect(() => vi.advanceTimersByTime(PLAYER_IDLE_TIMEOUT_MS)).not.toThrow();
+    expect(receiver.getData()).toBeNull();
+  });
+
   it('許可外 IP と偽の転送ヘッダーを拒否する', async () => {
     const receiver = createGameReceiver({ allowedIps: ['192.0.2.1'], logger: { log: vi.fn() } });
     receivers.push(receiver);
@@ -70,13 +111,13 @@ describe('gameReceiver', () => {
     receivers.push(receiver);
     const invalid = [{ name: 'PrivateName', x: 1, dimension: 0 }, { ...player, music: '1' }];
     for (let i = 0; i < 2; i++) await request(receiver.app).post('/').send(invalid).expect(200);
-    expect(log).toHaveBeenCalledTimes(2);
+    expect(log.mock.calls.filter(([message]) => message.startsWith('プレイヤーデータ除外:'))).toHaveLength(2);
     expect(log.mock.calls.flat().join(' ')).toContain('旧形式');
     expect(log.mock.calls.flat().join(' ')).not.toContain('PrivateName');
     expect(log.mock.calls.flat().join(' ')).not.toContain(player.name);
     now = 60_000;
     await request(receiver.app).post('/').send(invalid).expect(200);
-    expect(log).toHaveBeenCalledTimes(4);
+    expect(log.mock.calls.filter(([message]) => message.startsWith('プレイヤーデータ除外:'))).toHaveLength(4);
   });
 
   it('500 人まで受け付ける', () => {

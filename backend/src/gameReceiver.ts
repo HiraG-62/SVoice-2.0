@@ -5,6 +5,7 @@ import { createThrottledLog, DEFAULT_ALLOWED_IPS, restrictIps } from './ipAccess
 export const GAME_RECEIVER_PORT = 30000;
 export const PLAYER_IDLE_TIMEOUT_MS = 5_000;
 export const MAX_PLAYERS = 500;
+const MILLISECONDS_PER_SECOND = 1_000;
 
 function validationError(body: unknown): string | null {
   if (!Array.isArray(body)) return '配列が必要';
@@ -25,12 +26,19 @@ function invalidPlayerReason(player: unknown, path: readonly PropertyKey[]) {
 export function createGameReceiver({ gameApiSecret, allowedIps = DEFAULT_ALLOWED_IPS, logger = console, now = Date.now }: {
   gameApiSecret?: string; allowedIps?: readonly string[]; logger?: Pick<Console, 'log'>; now?: () => number;
 } = {}) {
+  const logEvent = (message: string) => {
+    try { logger.log(message); } catch {}
+  };
   const app = express();
   let data: PlayerData[] | null | undefined;
   let idleTimeout: ReturnType<typeof setTimeout> | undefined;
   const resetIdleTimer = () => {
     clearTimeout(idleTimeout);
-    idleTimeout = setTimeout(() => { data = null; }, PLAYER_IDLE_TIMEOUT_MS);
+    idleTimeout = setTimeout(() => {
+      const wasReceiving = Array.isArray(data);
+      data = null;
+      if (wasReceiving) logEvent(`ゲームデータ受信停止: ${PLAYER_IDLE_TIMEOUT_MS / MILLISECONDS_PER_SECOND} 秒受信なし`);
+    }, PLAYER_IDLE_TIMEOUT_MS);
   };
 
   const log = createThrottledLog(logger, now);
@@ -55,6 +63,7 @@ export function createGameReceiver({ gameApiSecret, allowedIps = DEFAULT_ALLOWED
       res.status(400).json({ error: 'Invalid player data format' });
       return;
     }
+    const wasReceiving = Array.isArray(data);
     data = (req.body as unknown[]).filter((player): player is PlayerData => {
       const result = playerDataSchema.safeParse(player);
       if (result.success) return true;
@@ -65,6 +74,7 @@ export function createGameReceiver({ gameApiSecret, allowedIps = DEFAULT_ALLOWED
       return false;
     });
     resetIdleTimer();
+    if (!wasReceiving) logEvent(`ゲームデータ受信開始: ${data.length} 人`);
     res.status(200).json({ success: true });
   });
 

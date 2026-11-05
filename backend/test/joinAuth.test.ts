@@ -16,14 +16,38 @@ afterEach(() => {
 });
 
 function setup(enabled = false, starting = false) {
+  const log = vi.fn();
   const add = vi.fn(async () => {});
   const fetchGuild = vi.fn(async () => ({ members: { fetch: async () => ({ nickname: '[Player]', roles: { cache: new Set<string>(), add, remove: async () => {} } }) } }));
-  const app = createDiscordApp({ config: { ...config, DATA_DIR: directory, DISCORD_ENABLED: enabled }, isStarting: () => starting, fetchGuild, nextBot: vi.fn(), logger: { log: vi.fn(), error: vi.fn() } });
+  const app = createDiscordApp({ config: { ...config, DATA_DIR: directory, DISCORD_ENABLED: enabled }, isStarting: () => starting, fetchGuild, nextBot: vi.fn(), logger: { log, error: vi.fn() } });
   const auth = (pass: string, userId = id, skipRole?: unknown) => request(app).post('/joinAuth').set('x-api-secret', config.API_SECRET).send({ id: userId, gamerTag: 'Player', pass, skipRole });
-  return { app, auth, add, fetchGuild };
+  return { app, auth, add, fetchGuild, log };
 }
 
 describe('参加認証と永続ロック', () => {
+  it('成功・不一致・ロック・拒否を記録し、ID とパスワードを含めない', async () => {
+    const { auth, log } = setup();
+    await auth(config.JOIN_PASSWORD).expect(200);
+    for (let i = 0; i < 5; i++) await auth('private-wrong-password').expect(200);
+    await auth(config.JOIN_PASSWORD).expect(200);
+    expect(log.mock.calls).toEqual([
+      ['参加認証成功: Player'],
+      ...[4, 3, 2, 1].map(remaining => [`参加パスワード不一致: Player（残り ${remaining} 回）`]),
+      ['参加ロック: Player'],
+      ['参加認証拒否: Player（ロック中）'],
+    ]);
+    const output = JSON.stringify(log.mock.calls);
+    for (const secret of [id, config.JOIN_PASSWORD, config.API_SECRET, 'private-wrong-password']) expect(output).not.toContain(secret);
+  });
+
+  it('503 の起動待ちでは認証ログを出さず、ログ出力失敗でも成功を返す', async () => {
+    const { auth, log } = setup(true, true);
+    await auth(config.JOIN_PASSWORD).expect(503);
+    expect(log).not.toHaveBeenCalled();
+    log.mockImplementation(() => { throw new Error('出力不可'); });
+    await auth(config.JOIN_PASSWORD, id, true).expect(200, { ok: true, locked: false, remaining: 5 });
+  });
+
   it('ログイン中も失敗回数を記録し、正しいパスワードの 503 では回数を消さない', async () => {
     const { auth, app, fetchGuild } = setup(true, true);
     await auth('wrong').expect(200, { ok: false, locked: false, remaining: 4 });

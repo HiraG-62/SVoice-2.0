@@ -1,5 +1,6 @@
 import { sendRedirect } from 'nuxt/server';
 import { DISCORD_STARTING } from '../../../utils/authMessages';
+import { logEvent } from '../../utils/eventLog';
 
 export default defineOAuthDiscordEventHandler({
   config: {
@@ -33,6 +34,7 @@ export default defineOAuthDiscordEventHandler({
       user: { discordId, discordAuth, gamerTag },
       loggedInAt: new Date(),
     })
+    logEvent(`ログイン: ${gamerTag}${discordAuth ? '（管理者）' : ''}`);
     
     return sendRedirect(event, '/');
   },

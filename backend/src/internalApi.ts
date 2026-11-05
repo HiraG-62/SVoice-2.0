@@ -43,6 +43,9 @@ export function validateDiscordId(id: unknown): id is string {
 }
 
 export function createDiscordApp({ config, fetchGuild, nextBot, isStarting = () => false, logger = console }: DiscordAppDependencies) {
+  const logEvent = (message: string) => {
+    try { logger.log(message.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')); } catch {}
+  };
   const app = express();
   app.use(restrictIps(config.INTERNAL_API_ALLOWED_IPS));
   app.use(express.json());
@@ -126,9 +129,15 @@ export function createDiscordApp({ config, fetchGuild, nextBot, isStarting = () 
     try {
       const locks = getStore();
       const result = await locks.withLock(id, async () => {
-        if ((locks.get(id)?.failures ?? 0) >= MAX_JOIN_FAILURES) return { ok: false, locked: true, remaining: 0 };
+        if ((locks.get(id)?.failures ?? 0) >= MAX_JOIN_FAILURES) {
+          logEvent(`参加認証拒否: ${gamerTag}（ロック中）`);
+          return { ok: false, locked: true, remaining: 0 };
+        }
         if (pass !== config.JOIN_PASSWORD) {
           const { failures } = locks.fail(id, gamerTag);
+          logEvent(failures >= MAX_JOIN_FAILURES
+            ? `参加ロック: ${gamerTag}`
+            : `参加パスワード不一致: ${gamerTag}（残り ${MAX_JOIN_FAILURES - failures} 回）`);
           return { ok: false, locked: failures >= MAX_JOIN_FAILURES, remaining: MAX_JOIN_FAILURES - failures };
         }
         if (req.body?.skipRole !== true) {
@@ -136,6 +145,7 @@ export function createDiscordApp({ config, fetchGuild, nextBot, isStarting = () 
           await updateRole(id, config.DISCORD_SERVER_ROLE_ID_JOIN, 'add');
         }
         locks.clear(id);
+        logEvent(`参加認証成功: ${gamerTag}`);
         return { ok: true, locked: false, remaining: MAX_JOIN_FAILURES };
       });
       res.status('error' in result ? 503 : 200).json(result);

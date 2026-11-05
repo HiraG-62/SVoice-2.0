@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 
 const { sendRedirect } = vi.hoisted(() => ({ sendRedirect: vi.fn() }));
@@ -18,8 +18,33 @@ const event = {} as H3Event;
 const identity = { user: { id: '123456789012345678' } };
 
 beforeEach(() => { vi.resetAllMocks(); });
+afterEach(() => { vi.restoreAllMocks(); });
 
 describe('Discord OAuth の起動待ち', () => {
+  it.each([false, true])('ログイン成功時にゲーマータグと管理者=%s を記録する', async admin => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    fetchBackend.mockResolvedValueOnce('Player').mockResolvedValueOnce(admin);
+    await handler.onSuccess(event, identity);
+    expect(log.mock.calls).toEqual([[`ログイン: Player${admin ? '（管理者）' : ''}`]]);
+    expect(setSession).toHaveBeenCalledWith(event, expect.objectContaining({ user: {
+      discordId: identity.user.id, discordAuth: admin, gamerTag: 'Player',
+    } }));
+    expect(sendRedirect).toHaveBeenCalledWith(event, '/');
+    expect(JSON.stringify(log.mock.calls)).not.toContain(identity.user.id);
+  });
+
+  it('セッション保存の失敗では成功ログを出さず、ログ出力失敗でもリダイレクトする', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    fetchBackend.mockResolvedValueOnce('Player').mockResolvedValueOnce(false);
+    setSession.mockRejectedValueOnce(new Error('保存不可'));
+    await expect(handler.onSuccess(event, identity)).rejects.toThrow('保存不可');
+    expect(log).not.toHaveBeenCalled();
+    fetchBackend.mockResolvedValueOnce('Player').mockResolvedValueOnce(false);
+    log.mockImplementation(() => { throw new Error('出力不可'); });
+    await handler.onSuccess(event, identity);
+    expect(sendRedirect).toHaveBeenCalledWith(event, '/');
+  });
+
   it.each(['getUserName', 'checkAdminRole'])('%s の起動待ちをログイン画面へ中継する', async endpoint => {
     if (endpoint === 'checkAdminRole') fetchBackend.mockResolvedValueOnce('Player');
     fetchBackend.mockRejectedValueOnce({ statusCode: 503, data: { error: 'discord_starting' } });

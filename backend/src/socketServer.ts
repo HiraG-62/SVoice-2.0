@@ -20,6 +20,9 @@ interface SocketServerDependencies {
 }
 
 export function createSocketServer({ config, getData, logsDirectory = path.join(config.DATA_DIR, 'logs'), now = () => new Date(), logger = console }: SocketServerDependencies) {
+  const logEvent = (message: string) => {
+    try { logger.log(message.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')); } catch {}
+  };
   const server = config.isDevelopment ? http.createServer() : createReloadingHttpsServer(config.TLS_KEY_PATH, config.TLS_CERT_PATH);
   const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketTokenPayload>(server, {
     cors: { origin: config.SERVER_URL, methods: ['GET', 'POST'] },
@@ -44,61 +47,74 @@ export function createSocketServer({ config, getData, logsDirectory = path.join(
   io.engine.on('close', () => clearInterval(interval));
 
   io.on('connection', (socket) => {
-    logger.log('接続: ' + socket.id);
+    logEvent(`接続: ${socket.data.gamerTag} ${socket.id}`);
     const isAdmin = (event: string) => {
       if (socket.data.admin) return true;
-      logger.log(`操作拒否: ${event} ${socket.id}`);
+      logEvent(`操作拒否: ${event} ${socket.data.gamerTag} ${socket.id}`);
       return false;
     };
     const removeSpeaker = () => {
       if (!speakers.delete(socket.id)) return;
       io.emit('setAdminSpeaker', speakerTags());
+      logEvent(`全体発言終了: ${socket.data.gamerTag}`);
     };
-    const leave = () => {
+    const leave = (reason: string) => {
       removeSpeaker();
-      users.delete(socket.id);
+      const wasJoined = users.delete(socket.id);
       void socket.leave(JOINED_ROOM);
+      if (wasJoined) logEvent(`退出: ${socket.data.gamerTag}（${reason}、参加中 ${users.size} 人）`);
     };
 
     socket.on('join', async () => {
+      const wasJoined = users.has(socket.id);
       users.set(socket.id, socket.data.gamerTag);
       await socket.join(JOINED_ROOM);
       if (!socket.connected || !users.has(socket.id)) return;
+      if (!wasJoined) logEvent(`参加: ${socket.data.gamerTag}（参加中 ${users.size} 人）`);
       socket.emit('joined', speakerTags());
     });
     socket.on('changeSetting', () => {
-      if (isAdmin('changeSetting')) io.emit('changeSetting');
+      if (!isAdmin('changeSetting')) return;
+      io.emit('changeSetting');
+      logEvent(`設定変更の通知: ${socket.data.gamerTag}`);
     });
     socket.on('onSpeaker', () => {
       if (!isAdmin('onSpeaker') || !users.has(socket.id)) return;
+      const wasSpeaker = speakers.has(socket.id);
       speakers.add(socket.id);
       io.emit('setAdminSpeaker', speakerTags());
+      if (!wasSpeaker) logEvent(`全体発言開始: ${socket.data.gamerTag}`);
     });
     socket.on('offSpeaker', () => {
       if (!speakers.has(socket.id) && !isAdmin('offSpeaker')) return;
       removeSpeaker();
     });
-    socket.on('exit', leave);
+    socket.on('exit', () => leave('退出操作'));
     socket.on('kick', (tag) => {
       if (!isAdmin('kick') || typeof tag !== 'string' || tag.length === 0) return;
+      let count = 0;
       for (const [id, gamerTag] of users) {
-        if (gamerTag === tag) io.to(id).emit('kicked');
+        if (gamerTag !== tag) continue;
+        io.to(id).emit('kicked');
+        count++;
       }
+      logEvent(`キック: ${socket.data.gamerTag} → ${tag}（${count} 接続）`);
     });
-    socket.on('disconnect', () => {
-      leave();
-      logger.log('切断: ' + socket.id);
+    socket.on('disconnect', (reason) => {
+      leave(reason);
+      logEvent(`切断: ${socket.data.gamerTag} ${socket.id} ${reason}`);
     });
     const acceptDebug = createDebugLimiter();
     socket.on('debug', (data, ack) => {
       const reply = typeof ack === 'function' ? ack : undefined;
       const date = now();
       if (!acceptDebug(data, date.getTime())) {
-        logger.log(`debug 制限超過: ${socket.id}`);
+        logEvent(`debug 制限超過: ${socket.data.gamerTag} ${socket.id}`);
         reply?.({ ok: false });
         return;
       }
       const ok = writeDebug(socket.data.gamerTag, data, date);
+      if (ok) logEvent(`debug 保存: ${socket.data.gamerTag}`);
       reply?.({ ok });
     });
   });
