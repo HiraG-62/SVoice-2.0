@@ -7,9 +7,11 @@ import { createHash } from 'node:crypto';
 import net from 'node:net';
 import { RELEASE, ROOT, require } from './common.mjs';
 import { assertPortsFree, listen, withSmokeProcess, deadline } from './smoke-process.mjs';
+import { STOP_TIMEOUT_MS } from './lifecycle.mjs';
 
 const PORTS = { frontend: 3100, socket: 3101, game: 30100, internal: 5100, internalTls: 1334 };
 const START_TIMEOUT_MS = 15_000;
+const STARTUP_FAILURE_TIMEOUT_MS = STOP_TIMEOUT_MS + START_TIMEOUT_MS;
 const POLL_MS = 150;
 const io = require(require.resolve('socket.io-client', { paths: [join(ROOT, 'backend')] })).io;
 const selfsigned = require(require.resolve('selfsigned', { paths: [join(ROOT, 'backend')] }));
@@ -190,7 +192,7 @@ async function tlsChecks(directory, result) {
         await listen(blocker, { port, host: '::' });
         try {
           await withProcess(directory, {}, async (_output, child, _stop, completion) => {
-            const code = await deadline(completion, `起動失敗で終了しない :${port}`);
+            const code = await deadline(completion, `起動失敗で終了しない :${port}`, STARTUP_FAILURE_TIMEOUT_MS);
             assert.notEqual(code, 0);
             assert.notEqual(code, null);
           }, [port], true);

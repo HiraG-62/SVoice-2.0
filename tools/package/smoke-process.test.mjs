@@ -68,6 +68,29 @@ test('検証処理が失敗しても起動した実プロセスを残さない',
   assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
 });
 
+test('起動失敗の終了待ち中に検証が失敗しても、停止要求を送らず元のエラーを保つ', async () => {
+  const directory = await startupFixture(1);
+  let pid;
+  const exits = [];
+  await assert.rejects(withSmokeProcess({ directory, executable: process.execPath,
+    args: [join(directory, 'app.mjs')], ports: [], expectedFailure: true,
+    onExit: result => exits.push(result) }, async app => {
+    pid = app.pid;
+    await ready(app.output);
+    throw new Error('検証中断');
+  }), /検証中断/);
+  assert.deepEqual(exits, [{ pid, code: 1 }]);
+  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+});
+
+test('起動失敗を期待している場合は終了コード 0 を成功扱いしない', async () => {
+  const directory = await startupFixture(0);
+  await assert.rejects(withSmokeProcess({ directory, executable: process.execPath,
+    args: [join(directory, 'app.mjs')], ports: [], expectedFailure: true }, async app => {
+    await app.completion;
+  }), /起動失敗時の終了コード/);
+});
+
 test('SIGINT を無視する exe も finally で強制終了する', async () => {
   const directory = await fixture();
   let pid;
@@ -127,4 +150,15 @@ async function ready(output) {
     await new Promise(resolve => setTimeout(resolve, 50));
   }
   throw new Error('起動タイムアウト');
+}
+
+async function startupFixture(exitCode) {
+  const directory = await fixture();
+  const exitDelayMs = 1000;
+  await writeFile(join(directory, 'app.mjs'), `
+    if (process.argv.includes('--stop')) throw new Error('停止要求の送信');
+    console.log('準備完了');
+    setTimeout(() => process.exit(${exitCode}), ${exitDelayMs});
+  `);
+  return directory;
 }

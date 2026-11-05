@@ -114,7 +114,9 @@ export async function withSmokeProcess({ directory, executable = join(directory,
     await check({ pid, child, output, stop, interrupt, completion });
   } finally {
     try {
-      const code = alive(pid) ? await stop() : await completion;
+      const code = expectedFailure
+        ? await deadline(completion, `起動失敗の終了タイムアウト: PID=${pid}`, stopTimeoutMs)
+        : alive(pid) ? await stop() : await completion;
       assert.equal(alive(pid), false, `exe が残存: PID=${pid}`);
       if (expectedFailure) assert.notEqual(code, 0, '起動失敗時の終了コード');
       else assert.equal(code, 0, '正常停止時の終了コード');
