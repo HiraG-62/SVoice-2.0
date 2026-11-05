@@ -8,7 +8,7 @@ const discordAuth = session.value?.user?.discordAuth;
 
 const { themeColor, themeColorDark } = useThemeColor();
 
-const DESKTOP_MIN_HEIGHT = 'min(600px, 90dvh)';
+const DESKTOP_HEIGHT = 'min(600px, 90dvh)';
 
 const setting = ref<boolean>(false);
 const settingTabs = ref(1);
@@ -34,8 +34,8 @@ defineExpose({
 </script>
 
 <template>
-  <v-dialog :model-value="setting" @update:model-value="updateSetting" :fullscreen="smAndDown" :width="smAndDown ? undefined : 800" :max-width="smAndDown ? undefined : '90vw'" scrollable :transition="smAndDown ? 'dialog-bottom-transition' : 'dialog-transition'">
-    <v-card :style="{ maxHeight: smAndDown ? '100dvh' : '90dvh', minHeight: smAndDown ? undefined : DESKTOP_MIN_HEIGHT }">
+  <v-dialog :model-value="setting" @update:model-value="updateSetting" :fullscreen="smAndDown" :width="smAndDown ? undefined : 800" :max-width="smAndDown ? undefined : '90vw'" :height="smAndDown ? undefined : DESKTOP_HEIGHT" scrollable :transition="smAndDown ? 'dialog-bottom-transition' : 'dialog-transition'">
+    <v-card :style="{ maxHeight: smAndDown ? '100dvh' : undefined }">
       <v-toolbar dark :color="themeColor" class="flex-shrink-0">
         <v-btn icon dark @click="closeSetting">
           <v-icon>mdi-close</v-icon>
