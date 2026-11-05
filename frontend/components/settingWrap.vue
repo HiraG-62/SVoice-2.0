@@ -8,6 +8,8 @@ const discordAuth = session.value?.user?.discordAuth;
 
 const { themeColor, themeColorDark } = useThemeColor();
 
+const DESKTOP_MIN_HEIGHT = 'min(600px, 90dvh)';
+
 const setting = ref<boolean>(false);
 const settingTabs = ref(1);
 
@@ -33,14 +35,14 @@ defineExpose({
 
 <template>
   <v-dialog :model-value="setting" @update:model-value="updateSetting" :fullscreen="smAndDown" :width="smAndDown ? undefined : 800" :max-width="smAndDown ? undefined : '90vw'" scrollable :transition="smAndDown ? 'dialog-bottom-transition' : 'dialog-transition'">
-    <v-card :style="{ maxHeight: smAndDown ? '100dvh' : '90dvh' }">
-      <v-toolbar dark :color="themeColor">
+    <v-card :style="{ maxHeight: smAndDown ? '100dvh' : '90dvh', minHeight: smAndDown ? undefined : DESKTOP_MIN_HEIGHT }">
+      <v-toolbar dark :color="themeColor" class="flex-shrink-0">
         <v-btn icon dark @click="closeSetting">
           <v-icon>mdi-close</v-icon>
         </v-btn>
         <v-toolbar-title>設定</v-toolbar-title>
       </v-toolbar>
-      <v-tabs v-model="settingTabs" :color="themeColorDark(1)" fixed-tabs>
+      <v-tabs v-model="settingTabs" :color="themeColorDark(1)" fixed-tabs class="flex-shrink-0">
         <v-tab value="general">一般</v-tab>
         <v-tab value="sound">サウンド</v-tab>
         <v-tab v-if="discordAuth" value="ingame">インゲーム</v-tab>
