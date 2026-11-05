@@ -23,8 +23,18 @@
     button.primary { background:#216b5b; border-color:#3ea68d; } button.danger { color:#ffb3a9; }
     table { border-collapse:collapse; width:100%; font-size:14px; } th { color:#9aafc5; font-size:12px; text-align:left; font-weight:normal; }
     td, th { padding:12px 10px; border-bottom:1px solid #304459; } td:first-child { font-weight:600; }
-    .table-scroll { overflow-x:auto; } .editor-row td { padding:0; border-bottom:0; }
-    details { background:#142130; border-bottom:1px solid #304459; } summary { cursor:pointer; color:#9aafc5; padding:8px 12px; font-size:12px; }
+    .table-scroll { overflow-x:auto; }
+    .player-tabs { display:flex; gap:8px; overflow-x:auto; padding:0 0 12px; }
+    .player-tab { flex:0 0 auto; text-align:left; min-width:130px; padding:10px 14px; }
+    .player-tab[aria-selected=true] { border-color:#75e2bf; background:#23463f; }
+    .tab-name { display:block; font-weight:600; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .tab-info { display:flex; gap:8px; margin-top:5px; font-size:11px; }
+    .add-tab { min-width:44px; text-align:center; font-size:24px; }
+    .player-panel { background:#142130; border:1px solid #304459; border-radius:8px; }
+    .player-controls { display:flex; align-items:center; gap:16px; flex-wrap:wrap; padding:16px; border-bottom:1px solid #304459; font-size:13px; }
+    .player-controls h3 { margin:0; font-size:18px; overflow-wrap:anywhere; }
+    .player-actions { display:flex; gap:8px; margin-left:auto; }
+    #add-panel { padding:18px; } #add-panel form { margin:0; }
     .fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; padding:14px; }
     .field { display:flex; flex-direction:column; gap:5px; font-weight:normal; font-size:12px; color:#a9bfd3; }
     .field small { font-size:10px; color:#728fa9; font-weight:normal; }
@@ -49,8 +59,9 @@
   </section>
   <section>
     <div class="toolbar"><h2>プレイヤー</h2><span class="subtle">ボットのマイクは常時送信</span></div>
-    <div class="table-scroll"><table><thead><tr><th>ゲーマータグ</th><th>種類</th><th>送信に含める</th><th>ボットの状態</th><th>全体発言</th><th>操作</th></tr></thead><tbody id="players"></tbody></table></div>
-    <form id="add"><input name="name" placeholder="ゲーマータグ" aria-label="ゲーマータグ" required maxlength="100"><select name="kind" aria-label="種類"><option value="bot">ボット</option><option value="listener">聞き手</option></select><button class="primary">追加</button></form>
+    <div id="player-tabs" class="player-tabs" role="tablist" aria-label="プレイヤー"><button id="add-tab" class="player-tab add-tab" type="button" role="tab" aria-label="追加" aria-controls="add-panel" aria-selected="false" tabindex="-1">＋</button></div>
+    <div id="player-panels"></div>
+    <div id="add-panel" class="player-panel" role="tabpanel" aria-labelledby="add-tab" hidden><form id="add"><input name="name" placeholder="ゲーマータグ" aria-label="ゲーマータグ" required maxlength="100"><select name="kind" aria-label="種類"><option value="bot">ボット</option><option value="listener">聞き手</option></select><button class="primary">追加</button></form></div>
   </section>
   <footer>データ送信 200ms · 距離設定の取得 5 秒</footer>
   <script>
@@ -71,33 +82,55 @@
       hasTelephone:[[0,'なし'],[1,'あり']], useMegaphone:[[0,'なし'],[1,'使用中']], useMicrophone:[[0,'なし'],[1,'使用中']]
     };
     const elements = new Map();
-    let busy = 0, polling = false;
+    let busy = 0, polling = false, mutationVersion = 0, tabIndex = 0, selectedTab;
     function element(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
     async function action(data) {
       busy++;
+      mutationVersion++;
       try {
         const response = await fetch('/api/action', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || '操作失敗');
+        if (data.action === 'add') { selectedTab = data.name; $('#add').elements.namedItem('name').value = ''; }
         $('#error').textContent = '';
       } catch (error) { $('#error').textContent = error.message; }
       finally { busy--; if (!busy) void refresh(); }
     }
     function check(label, change) { const node = element('input'); node.type = 'checkbox'; node.setAttribute('aria-label', label); node.onchange = () => change(node.checked); return node; }
-    function buildRow(row, fields) {
+    function selectTab(name) {
+      selectedTab = name;
+      for (const [name,nodes] of elements) {
+        const selected = name === selectedTab;
+        nodes.tab.setAttribute('aria-selected',String(selected)); nodes.tab.tabIndex = selected ? 0 : -1;
+        nodes.panel.hidden = !selected;
+      }
+      const adding = selectedTab === null;
+      $('#add-tab').setAttribute('aria-selected',String(adding)); $('#add-tab').tabIndex = adding ? 0 : -1;
+      $('#add-panel').hidden = !adding;
+    }
+    function buildPlayer(row, fields) {
       const name = row.player.name;
-      const tr = element('tr');
-      tr.dataset.name = name;
+      const id = 'player-' + ++tabIndex;
+      const tab = element('button',undefined,'player-tab'); tab.type = 'button'; tab.id = id + '-tab'; tab.title = name;
+      tab.setAttribute('role','tab'); tab.setAttribute('aria-controls',id + '-panel');
+      tab.onclick = () => selectTab(name);
+      const meta = element('span',undefined,'tab-info'), tabStatus = element('span'), excluded = element('span','送信対象外','subtle');
+      meta.append(element('span',row.kind === 'bot' ? 'ボット' : '聞き手','subtle'),document.createTextNode(' '),tabStatus,document.createTextNode(' '),excluded);
+      tab.append(element('span',name,'tab-name'),document.createTextNode(' '),meta); $('#add-tab').before(tab);
+      const panel = element('div',undefined,'player-panel'); panel.id = id + '-panel'; panel.hidden = true;
+      panel.setAttribute('role','tabpanel'); panel.setAttribute('aria-labelledby',tab.id);
       const include = check(name + ' 送信に含める', value => action({action:'include',name,value}));
       const speaker = check(name + ' 全体発言', value => action({action:'speaker',name,value}));
       const status = element('span');
       const restart = element('button','再起動'); restart.onclick = () => action({action:'restart',name});
       const remove = element('button','削除','danger'); remove.onclick = () => action({action:'remove',name});
-      const cells = [element('td',name),element('td',row.kind === 'bot' ? 'ボット' : '聞き手'),element('td'),element('td'),element('td'),element('td')];
-      cells[2].append(include); cells[3].append(status); if (row.kind === 'bot') cells[4].append(speaker);
-      cells[5].append(restart,document.createTextNode(' '),remove); tr.append(...cells);
-      const editRow = element('tr',undefined,'editor-row'), td = element('td'); td.colSpan = 6;
-      const details = element('details'); details.append(element('summary','状態の編集'));
+      const controls = element('div',undefined,'player-controls'), includeLabel = element('label');
+      includeLabel.append(include,document.createTextNode(' 送信に含める'));
+      controls.append(element('h3',name),element('span',row.kind === 'bot' ? 'ボット' : '聞き手','badge'),includeLabel,status);
+      if (row.kind === 'bot') {
+        const speakerLabel = element('label'); speakerLabel.append(speaker,document.createTextNode(' 全体発言')); controls.append(speakerLabel);
+      }
+      const actions = element('div',undefined,'player-actions'); actions.append(restart,remove); controls.append(actions);
       const grid = element('div',undefined,'fields'), inputs = new Map();
       fields.forEach(field => {
         const label = element('label',undefined,'field'); label.append(element('span',labels[field]),element('small',field));
@@ -119,8 +152,8 @@
         } else wrap.append(input);
         label.append(wrap); grid.append(label); inputs.set(field,{input,select});
       });
-      details.append(grid); td.append(details); editRow.append(td); $('#players').append(tr,editRow);
-      const result = {tr,editRow,include,speaker,status,restart,inputs}; elements.set(name,result); return result;
+      panel.append(controls,grid); $('#player-panels').append(panel);
+      const result = {tab,panel,tabStatus,excluded,include,speaker,status,restart,inputs}; elements.set(name,result); return result;
     }
     function render(state) {
       $('#frontend').textContent = state.frontend; $('#last-send').textContent = '送信: ' + state.lastSend;
@@ -132,13 +165,21 @@
       }
       listener.value = state.listener;
       const names = new Set(state.rows.map(row => row.player.name));
-      for (const [name,nodes] of elements) if (!names.has(name)) { nodes.tr.remove(); nodes.editRow.remove(); elements.delete(name); }
+      if (selectedTab === undefined) selectedTab = state.rows[0]?.player.name ?? null;
+      else if (selectedTab !== null && !names.has(selectedTab)) {
+        const index = [...elements.keys()].indexOf(selectedTab);
+        selectedTab = state.rows[Math.max(0,Math.min(index,state.rows.length - 1))]?.player.name ?? null;
+      }
+      for (const [name,nodes] of elements) if (!names.has(name)) { nodes.tab.remove(); nodes.panel.remove(); elements.delete(name); }
       state.rows.forEach(row => {
-        const nodes = elements.get(row.player.name) || buildRow(row,state.fields);
+        const nodes = elements.get(row.player.name) || buildPlayer(row,state.fields);
         nodes.include.checked = row.included; nodes.speaker.checked = !!row.bot?.speaker;
         nodes.speaker.disabled = row.bot?.status !== 'joined'; nodes.restart.hidden = row.bot?.status !== 'error';
         nodes.status.textContent = row.bot ? ({starting:'起動中',joined:'参加中',error:'エラー'}[row.bot.status] + (row.bot.message ? ' · ' + row.bot.message : '')) : 'データのみ';
         nodes.status.className = row.bot?.status === 'joined' ? 'good' : row.bot?.status === 'error' ? 'bad' : 'subtle';
+        nodes.tabStatus.textContent = row.bot ? {starting:'起動中',joined:'参加中',error:'エラー'}[row.bot.status] : '';
+        nodes.tabStatus.className = nodes.status.className;
+        nodes.excluded.hidden = row.included;
         for (const [field,{input,select}] of nodes.inputs) {
           const value = field.split('.').reduce((result,key) => result[key],row.player);
           if (document.activeElement !== input) input.value = value;
@@ -151,6 +192,7 @@
           }
         }
       });
+      selectTab(selectedTab);
       $('#decisions').replaceChildren(...state.decisions.map(item => {
         const row = element('tr');
         row.append(element('td',item.name),element('td',item.distance === null ? '—' : item.distance.toFixed(2)));
@@ -162,12 +204,23 @@
     async function refresh() {
       if (polling || busy) return;
       polling = true;
-      try { const response = await fetch('/api/state'); if (!response.ok) throw new Error(); const state = await response.json(); if (!busy) render(state); }
+      const version = mutationVersion;
+      try { const response = await fetch('/api/state'); if (!response.ok) throw new Error(); const state = await response.json(); if (!busy && version === mutationVersion) render(state); }
       catch { $('#error').textContent = '操作画面の接続切断'; }
-      finally { polling = false; }
+      finally { polling = false; if (!busy && version !== mutationVersion) void refresh(); }
     }
     $('#sending').onchange = event => action({action:'sending',value:event.target.checked});
     $('#listener').onchange = event => action({action:'listener',name:event.target.value});
+    $('#add-tab').onclick = () => selectTab(null);
+    $('#player-tabs').onkeydown = event => {
+      const tabs = [...elements.values()].map(nodes => nodes.tab).concat($('#add-tab'));
+      const index = tabs.indexOf(document.activeElement);
+      if (index < 0 || !['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+      event.preventDefault();
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+        : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[next].click(); tabs[next].focus();
+    };
     $('#add').onsubmit = event => { event.preventDefault(); const data = new FormData(event.target); void action({action:'add',name:data.get('name'),kind:data.get('kind')}); };
     void refresh(); setInterval(refresh,750);
   </script>
