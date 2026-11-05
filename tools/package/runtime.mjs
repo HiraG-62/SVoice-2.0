@@ -6,12 +6,14 @@ import { createHash } from 'node:crypto';
 import { publicAssetKey } from './common.mjs';
 import { createLifecycle, closeServer } from './lifecycle.mjs';
 import { createStopController, requestStop } from './stop.mjs';
+import { installConsoleTime } from './logTime.mjs';
 
 const CONTENT_TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.mp3': 'audio/mpeg' };
 const DEFAULT_FRONTEND_PORT = 3000;
 const MAX_PORT = 65535;
 
 export async function launch(loadBackend, loadFrontend) {
+  installConsoleTime();
   const lifecycle = createLifecycle();
   try {
     const root = globalThis.__packagingRoot;

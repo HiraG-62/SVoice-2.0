@@ -122,12 +122,27 @@ Copy-Item .\VERSION.previous.txt .\VERSION.txt -Force
 ```powershell
 Set-Location C:\svoice
 .\svoice-service.exe status
-Get-Content .\data\service-logs\svoice-service.out.log -Tail 50
-Get-Content .\data\service-logs\svoice-service.err.log -Tail 50
+Get-Content .\data\service-logs\svoice-service.out.log -Tail 50 -Encoding UTF8
+Get-Content .\data\service-logs\svoice-service.err.log -Tail 50 -Encoding UTF8
 Invoke-WebRequest https://voice.example:3000/ -UseBasicParsing
 Invoke-RestMethod https://voice.example:3000/api/getSetting
 ```
 
-stdout / stderr は各 10 MB・8 世代でローテーションする。[WinSW ログ設定](https://github.com/winsw/winsw/blob/v2/doc/loggingAndErrorReporting.md)
+stdout / stderr は各 10 MB・8 世代でローテーションする。各行の先頭はローカル時刻（例 `2026-11-06T01:27:31.123+09:00`）。PowerShell 5.1 の `Get-Content` は `-Encoding UTF8` がないと日本語が文字化けする。[WinSW ログ設定](https://github.com/winsw/winsw/blob/v2/doc/loggingAndErrorReporting.md)
+
+### 利用者から届いたデバッグ情報
+
+画面の「デバッグ用 送信」の内容は `C:\svoice\data\backend\logs\YYYY-MM-DD.jsonl`（`DATA_DIR` を変えた場合はその下の `logs`）に 1 行 1 件で保存される。ファイル名の日付はローカル時刻、`receivedAt` は UTC。30 日・合計 100 MB を超えた古いファイルは自動で削除される。
+
+```powershell
+Set-Location C:\svoice
+# 日付とゲーマータグを指定して読む
+Get-Content .\data\backend\logs\2026-11-06.jsonl -Encoding UTF8 |
+  ConvertFrom-Json |
+  Where-Object { $_.gamerTag -eq 'ゲーマータグ' } |
+  ForEach-Object { $_.receivedAt; $_.data | ConvertTo-Json -Depth 20 }
+```
+
+開発機で読む場合は、jsonl を開発機の `backend/<DATA_DIR>/logs/` にコピーし、`pnpm --filter @svoice/backend debug-log --tag <ゲーマータグ> --date YYYY-MM-DD` を使う。
 
 初回は実際の Discord ログイン・ロール操作・人数表示、2 人の SkyWay 通話、サービス停止、異常時の再起動、PC 再起動後の起動を確認する。
